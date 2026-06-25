@@ -3,7 +3,7 @@ import time
 PACKET_SIZE = 35
 HEADER = b'\xAA\x01'
 
-ser = serial.Serial("COM3", 115200, timeout=1)
+ser = serial.Serial("COM4", 115200, timeout=1)
 
 def read_one_packet(ser):
     ser.reset_input_buffer()

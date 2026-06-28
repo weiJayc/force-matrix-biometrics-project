@@ -1,6 +1,7 @@
 import serial
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.patheffects as path_effects
 
 PORT = "COM3"
 BAUDRATE = 115200
@@ -10,10 +11,13 @@ PAYLOAD_SIZE = 32
 PACKET_SIZE = len(HEADER) + PAYLOAD_SIZE + 1
 ROWS = 4
 COLS = 4
+VMIN = 0
+VMAX = 16384
 
 
 def read_one_packet(ser):
     """Read one complete packet and return the raw bytes, including header."""
+    ser.reset_input_buffer()
     while True:
         first = ser.read(1)
         if not first:
@@ -36,6 +40,7 @@ def read_one_packet(ser):
         checksum = ser.read(1)
         if len(checksum) != 1:
             return None
+        print(HEADER + payload + checksum)
 
         return HEADER + payload + checksum
 
@@ -58,6 +63,7 @@ def main():
     fig, ax = plt.subplots()
     image = None
     colorbar = None
+    value_texts = []
 
     try:
         while True:
@@ -66,19 +72,35 @@ def main():
                 continue
 
             grid = packet_to_grid(packet)
-            vmin = float(grid.min())
-            vmax = float(grid.max())
-            if vmin == vmax:
-                vmax = vmin + 1.0
 
             if image is None:
-                image = ax.imshow(grid, cmap="inferno", aspect="auto", vmin=vmin, vmax=vmax)
+                image = ax.imshow(grid, cmap="Blues", aspect="auto", vmin=VMIN, vmax=VMAX)
                 colorbar = fig.colorbar(image, ax=ax)
+                for row in range(ROWS):
+                    row_texts = []
+                    for col in range(COLS):
+                        text = ax.text(
+                            col,
+                            row,
+                            f"{int(grid[row, col])}",
+                            ha="center",
+                            va="center",
+                            color="white",
+                            fontsize=10,
+                            fontweight="bold",
+                        )
+                        text.set_path_effects([
+                            path_effects.Stroke(linewidth=2.5, foreground="black"),
+                            path_effects.Normal(),
+                        ])
+                        row_texts.append(text)
+                    value_texts.append(row_texts)
             else:
                 image.set_data(grid)
-                image.set_clim(vmin, vmax)
-                if colorbar is not None:
-                    colorbar.update_normal(image)
+
+                for row in range(ROWS):
+                    for col in range(COLS):
+                        value_texts[row][col].set_text(f"{int(grid[row, col])}")
 
             ax.set_title("Serial Heatmap")
             ax.set_xlabel("Column")

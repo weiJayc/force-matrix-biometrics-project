@@ -4,7 +4,7 @@ from datetime import datetime
 
 PACKET_SIZE = 35
 TIMESET = 5 #5s
-ser = serial.Serial('COM4', 115200, timeout=1)
+ser = serial.Serial('COM3', 115200, timeout=1)
 
 count = 0
 timeCnt = 0

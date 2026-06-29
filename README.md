@@ -54,6 +54,16 @@ This project interfaces with a pressure/force sensor array to capture biometric 
 
 ## Usage
 
+### Build a standalone EXE
+
+Run the PowerShell build script to generate a single-file Windows executable:
+
+```powershell
+.uild_exe.ps1
+```
+
+The built executable will appear in `dist\PressureMatrixCollector.exe` by default. The script uses the Tkinter desktop launcher in `desktop_app.py`.
+
 ### 1. **Real-time Heatmap Visualization**
 
 Run `heatmap_serial_sample.py` to continuously capture and display sensor data as a heatmap:
@@ -123,6 +133,12 @@ The project is now organized around a shared package instead of duplicated scrip
 - `force_matrix_biometrics/profiles.py` stores the active serial layouts for each script
 
 The original root scripts remain as entrypoints so existing commands keep working.
+
+For the desktop app and packaging workflow, use:
+
+```powershell
+python desktop_app.py
+```
 
 ## Troubleshooting
 

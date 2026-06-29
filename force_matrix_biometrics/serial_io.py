@@ -12,8 +12,6 @@ def open_serial(profile: SerialProfile) -> serial.Serial:
 
 def read_one_packet(ser: serial.Serial, profile: SerialProfile) -> bytes | None:
     """Read one complete packet and return the raw bytes, including header."""
-
-    ser.reset_input_buffer()
     while True:
         first = ser.read(1)
         if not first:

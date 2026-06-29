@@ -22,16 +22,16 @@ This project interfaces with a pressure/force sensor array to capture biometric 
 ## Software Requirements
 
 - Python 3.x
-- Dependencies listed in `requirement.txt`:
-  - `numpy` - Numerical operations and data reshaping
-  - `matplotlib` - Real-time heatmap visualization
-  - `pyserial` - Serial communication with the sensor
+- Dependencies listed in `requirements.txt`:
+   - `numpy` - Numerical operations and data reshaping
+   - `matplotlib` - Real-time heatmap visualization
+   - `pyserial` - Serial communication with the sensor
 
 ## Installation
 
 1. **Install Python dependencies:**
    ```bash
-   pip install -r requirement.txt
+   pip install -r requirements.txt
    ```
 
 2. **Configure Serial Connection:**
@@ -43,11 +43,13 @@ This project interfaces with a pressure/force sensor array to capture biometric 
 
 ```
 .
-├── catch.py                    # Reads sensor data and saves packets to file
-├── heatmap_serial_sample.py   # Real-time visualization of sensor data
-├── press_img.txt              # Log file containing captured sensor packets
-├── requirement.txt            # Python dependencies
-└── README.md                  # This file
+├── catch.py                     # Legacy entrypoint for count-based capture
+├── heatmap_serial_sample.py      # Legacy entrypoint for the heatmap viewer
+├── timeCatch.py                  # Legacy entrypoint for timed capture
+├── force_matrix_biometrics/      # Shared package for serial + visualization logic
+├── press_img.txt                 # Log file containing captured sensor packets
+├── requirements.txt              # Python dependencies
+└── README.md                     # This file
 ```
 
 ## Usage
@@ -100,13 +102,7 @@ Each value represents pressure intensity (0-255) at that sensor point.
 ## Configuration
 
 ### Serial Port Settings
-Edit the following variables in both scripts as needed:
-
-```python
-PORT = "COM3"           # Serial port (change based on your system)
-BAUDRATE = 115200       # Baud rate
-TIMEOUT = 1             # Serial timeout in seconds
-```
+Edit the profile definitions in `force_matrix_biometrics/profiles.py` if you need to change the serial port, baud rate, timeout, or packet layout.
 
 ### Sensor Grid Dimensions
 ```python
@@ -115,11 +111,18 @@ COLS = 7                # Number of columns in sensor matrix
 ```
 
 ### Data Capture
-In `catch.py`, modify the loop condition to change number of packets captured:
-```python
-while packet_received < 17:  # Change 17 to desired number of packets
-    ...
-```
+In `catch.py`, adjust the `packet_limit` and `delay_seconds` values passed to `capture_packets`.
+
+## Reorganized Layout
+
+The project is now organized around a shared package instead of duplicated script logic:
+
+- `force_matrix_biometrics/serial_io.py` handles packet scanning and decoding
+- `force_matrix_biometrics/capture.py` handles packet logging and timed capture
+- `force_matrix_biometrics/visualization.py` handles the heatmap display
+- `force_matrix_biometrics/profiles.py` stores the active serial layouts for each script
+
+The original root scripts remain as entrypoints so existing commands keep working.
 
 ## Troubleshooting
 

@@ -7,21 +7,21 @@ HEADER = b"\xAA\x01"
 COUNT_CAPTURE_PROFILE = SerialProfile(
     port="COM4",
     baudrate=115200,
-    timeout=1,
+    timeout=0,
     header=HEADER,
     packet_size=35,
 )
 
 TIMED_CAPTURE_PROFILE = SerialProfile(
-    port="COM3",
+    port="COM4",
     baudrate=115200,
-    timeout=1,
+    timeout=0,
     header=HEADER,
     packet_size=35,
 )
 
 HEATMAP_PROFILE = SerialProfile(
-    port="COM3",
+    port="COM4",
     baudrate=115200,
     timeout=1,
     header=HEADER,

@@ -75,18 +75,22 @@ def capture_frames_for_duration(
 
     ser = open_serial(profile)
     frames: list[np.ndarray] = []
+    raw_packets: list[bytes] = []
     start = time.monotonic()
     deadline = start + duration_seconds
 
     try:
         while time.monotonic() < deadline:
+            
             packet = read_one_packet(ser, profile)
+            
             if packet is None:
                 if progress_callback:
                     elapsed = min(time.monotonic() - start, duration_seconds)
                     progress_callback(min(elapsed / duration_seconds, 1.0), elapsed, len(frames))
                 continue
 
+            raw_packets.append(packet)
             grid = packet_to_grid(packet, profile)
             frames.append(np.array(grid, copy=True))
 
@@ -104,33 +108,29 @@ def capture_frames_for_duration(
     if progress_callback:
         progress_callback(1.0, duration_seconds, len(frames))
 
-    return frames
+    return frames, raw_packets
 
 
 def save_recording_csv(
-    frames: list[np.ndarray],
+    packets: list[bytes],
     csv_path: str | Path,
     label: str,
 ) -> Path:
-    if not frames:
-        raise ValueError("frames cannot be empty")
+    if not packets:
+        raise ValueError("packets cannot be empty")
 
     output_path = Path(csv_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    first_frame = np.asarray(frames[0])
-    rows, cols = first_frame.shape
-    value_columns = [f"value_{index:02d}" for index in range(rows * cols)]
-    header = ["label", "frame_index", *value_columns]
+    header = ["label", "frame_index", "hex_packet"]
 
     with output_path.open("w", newline="", encoding="utf-8") as file:
         writer = csv.writer(file)
         writer.writerow(header)
-        for frame_index, frame in enumerate(frames):
-            array = np.asarray(frame)
-            if array.shape != (rows, cols):
-                raise ValueError("All frames must share the same shape")
-            writer.writerow([label, frame_index, *[int(value) for value in array.reshape(-1)]])
+
+        for frame_index, packet in enumerate(packets):
+            hex_str = " ".join(f"{b:02x}" for b in packet)
+            writer.writerow([label, frame_index, hex_str])
 
     return output_path
 
@@ -179,17 +179,37 @@ def capture_and_save_recording(
     progress_callback: ProgressCallback | None = None,
 ) -> RecordingResult:
     sanitized_label = sanitize_label(label)
-    captured_frames = capture_frames_for_duration(
+
+    print(f"[INFO] Start capture: {duration_seconds}s, target={target_frame_count}")
+    print(f"[INFO] Dataset root: {dataset_root}")
+    print(f"[INFO] Label: {sanitized_label}")
+
+    captured_frames, raw_packets = capture_frames_for_duration(
         profile=profile,
         duration_seconds=duration_seconds,
         frame_callback=frame_callback,
         progress_callback=progress_callback,
     )
+
+    print(f"[INFO] Captured frames: {len(captured_frames)}")
+
+    if len(captured_frames) == 0:
+        raise RuntimeError("No frames captured → sensor / COM problem")
+
     normalized_frames = normalize_frames(captured_frames, target_frame_count)
+
+    print(f"[INFO] Normalized frames: {len(normalized_frames)}")
+
     recording_path = build_recording_path(dataset_root, sanitized_label)
-    csv_path = save_recording_csv(normalized_frames, recording_path, sanitized_label)
+    print(f"[INFO] Saving to: {recording_path}")
+
+    csv_path = save_recording_csv(raw_packets, recording_path, sanitized_label)
+
+    print(f"[INFO] Saved CSV: {csv_path}")
 
     rows, cols = normalized_frames[0].shape
+
+
     return RecordingResult(
         label=sanitized_label,
         csv_path=csv_path,
@@ -198,3 +218,17 @@ def capture_and_save_recording(
         rows=rows,
         cols=cols,
     )
+
+def save_recording_raw_hex(
+    packets: list[bytes],
+    csv_path: str | Path,
+) -> Path:
+    output_path = Path(csv_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with output_path.open("w", encoding="utf-8") as f:
+        for packet in packets:
+            hex_line = " ".join(f"{b:02x}" for b in packet)
+            f.write(hex_line + "\n")
+
+    return output_path

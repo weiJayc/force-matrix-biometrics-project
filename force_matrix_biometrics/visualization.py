@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+import time
 import matplotlib.patheffects as path_effects
 import matplotlib.pyplot as plt
 
@@ -18,11 +18,12 @@ def run_heatmap(profile: SerialProfile, title: str = "Serial Heatmap") -> None:
     try:
         while True:
             packet = read_one_packet(ser, profile)
+            
             if packet is None:
                 continue
 
             grid = packet_to_grid(packet, profile)
-
+            
             if image is None:
                 image = ax.imshow(grid, cmap="Blues", aspect="auto", vmin=profile.vmin, vmax=profile.vmax)
                 fig.colorbar(image, ax=ax)
@@ -55,7 +56,7 @@ def run_heatmap(profile: SerialProfile, title: str = "Serial Heatmap") -> None:
             ax.set_xlabel("Column")
             ax.set_ylabel("Row")
             fig.canvas.draw_idle()
-            plt.pause(0.01)
+            plt.pause(0.001)
     except KeyboardInterrupt:
         pass
     finally:

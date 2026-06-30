@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import threading
+import time
 import tkinter as tk
+import serial.tools.list_ports
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
@@ -10,7 +12,8 @@ from matplotlib.figure import Figure
 
 from .profiles import HEATMAP_PROFILE
 from .recording import capture_and_save_recording, discover_recording_csv_files, load_recording_csv
-
+from .config import SerialProfile
+from .serial_io import open_serial
 
 class PressureMatrixApp(tk.Tk):
     def __init__(self) -> None:
@@ -18,7 +21,12 @@ class PressureMatrixApp(tk.Tk):
         self.title("Pressure Matrix Collector")
         self.geometry("980x620")
         self.minsize(900, 560)
+        self.runtime_profile = HEATMAP_PROFILE
+        self._live_thread = None
+        self._live_running = True
 
+        self.com_var = tk.StringVar(value=self.runtime_profile.port)
+        self._serial = None
         self.label_var = tk.StringVar(value="class_a")
         self.duration_var = tk.StringVar(value="5")
         self.frame_count_var = tk.StringVar(value="64")
@@ -37,6 +45,10 @@ class PressureMatrixApp(tk.Tk):
         self._build_layout()
         self._build_heatmap()
         self.refresh_dataset_browser()
+        self._refresh_com_ports()
+
+
+    
 
     def _build_layout(self) -> None:
         self.columnconfigure(0, weight=1)
@@ -60,6 +72,16 @@ class PressureMatrixApp(tk.Tk):
         ttk.Label(control_frame, text="Dataset root").grid(row=1, column=0, sticky="w", pady=(12, 0))
         ttk.Entry(control_frame, textvariable=self.dataset_root_var).grid(row=1, column=1, columnspan=3, sticky="ew", padx=(8, 8), pady=(12, 0))
         ttk.Button(control_frame, text="Browse", command=self._browse_dataset_root).grid(row=1, column=4, sticky="ew", pady=(12, 0))
+
+        ttk.Label(control_frame, text="COM Port").grid(row=2, column=0, sticky="w", pady=(12, 0))
+        self.com_box = ttk.Combobox(control_frame, textvariable=self.com_var, state="readonly")
+        self.com_box.grid(row=2, column=1, sticky="ew", padx=(8, 24), pady=(12, 0))
+
+        ttk.Button(control_frame, text="Refresh COM", command=self._refresh_com_ports)\
+            .grid(row=2, column=2, sticky="ew", pady=(12, 0))
+
+        ttk.Button(control_frame, text="Connect", command=self._connect_com)\
+            .grid(row=2, column=3, sticky="ew", pady=(12, 0))
 
         self.start_button = ttk.Button(control_frame, text="Start Capture", command=self._start_capture)
         self.start_button.grid(row=1, column=5, sticky="ew", padx=(24, 0), pady=(12, 0))
@@ -103,19 +125,19 @@ class PressureMatrixApp(tk.Tk):
         self._axes.set_xlabel("Column")
         self._axes.set_ylabel("Row")
 
-        blank_frame = [[0] * (HEATMAP_PROFILE.cols or 4) for _ in range(HEATMAP_PROFILE.rows or 4)]
+        blank_frame = [[0] * (self.runtime_profile.cols or 4) for _ in range(self.runtime_profile.rows or 4)]
         self._heatmap_image = self._axes.imshow(
             blank_frame,
             cmap="Blues",
             aspect="equal",
-            vmin=HEATMAP_PROFILE.vmin,
-            vmax=HEATMAP_PROFILE.vmax,
+            vmin=self.runtime_profile.vmin,
+            vmax=self.runtime_profile.vmax,
         )
         figure.colorbar(self._heatmap_image, ax=self._axes, fraction=0.046, pad=0.04)
 
-        for row in range(HEATMAP_PROFILE.rows or 4):
+        for row in range(self.runtime_profile.rows or 4):
             row_texts = []
-            for col in range(HEATMAP_PROFILE.cols or 4):
+            for col in range(self.runtime_profile.cols or 4):
                 text = self._axes.text(
                     col,
                     row,
@@ -227,7 +249,7 @@ class PressureMatrixApp(tk.Tk):
         def worker() -> None:
             try:
                 result = capture_and_save_recording(
-                    profile=HEATMAP_PROFILE,
+                    profile=self.runtime_profile,
                     dataset_root=dataset_root,
                     label=label,
                     duration_seconds=duration_seconds,
@@ -245,11 +267,14 @@ class PressureMatrixApp(tk.Tk):
         self._capture_thread.start()
 
     def _update_heatmap(self, frame, frame_count: int) -> None:
+        
         self._heatmap_image.set_data(frame)
         for row_index, row in enumerate(frame):
             for col_index, value in enumerate(row):
                 self._heatmap_texts[row_index][col_index].set_text(str(int(value)))
         self._canvas.draw_idle()
+        
+
         self.frame_count_status_var.set(f"{frame_count} frames captured")
 
     def _update_progress(self, progress: float, elapsed_seconds: float, frame_count: int) -> None:
@@ -279,7 +304,40 @@ class PressureMatrixApp(tk.Tk):
         for widget in (self.start_button,):
             widget.configure(state=state)
 
+    def _refresh_com_ports(self):
+        ports = [p.device for p in serial.tools.list_ports.comports()]
+        self.com_box["values"] = ports
 
+        if ports and self.com_var.get() not in ports:
+            self.com_var.set(ports[0])
+
+    def _connect_com(self):
+        port = self.com_var.get()
+
+        if not port:
+            messagebox.showerror("Error", "No COM selected")
+            return
+
+        # update profile dynamically
+        #global self.runtime_profile
+
+        self.runtime_profile = SerialProfile(
+            port=port,
+            baudrate=self.runtime_profile.baudrate,
+            timeout=self.runtime_profile.timeout,
+            header=self.runtime_profile.header,
+            packet_size=self.runtime_profile.packet_size,
+            rows=self.runtime_profile.rows,
+            cols=self.runtime_profile.cols,
+            value_dtype=self.runtime_profile.value_dtype,
+            vmin=self.runtime_profile.vmin,
+            vmax=self.runtime_profile.vmax,
+        )
+
+        # reopen serial for safety (if needed later)
+        self.status_var.set(f"Connected to {port}")
+    
+        
 def main() -> None:
     app = PressureMatrixApp()
     app.mainloop()

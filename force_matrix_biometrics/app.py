@@ -3,6 +3,7 @@ from __future__ import annotations
 import threading
 import time
 import tkinter as tk
+import serial
 import serial.tools.list_ports
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
@@ -13,7 +14,7 @@ from matplotlib.figure import Figure
 from .profiles import HEATMAP_PROFILE
 from .recording import capture_and_save_recording, discover_recording_csv_files, load_recording_csv
 from .config import SerialProfile
-from .serial_io import open_serial
+from .serial_io import open_serial, packet_to_grid, read_one_packet
 
 class PressureMatrixApp(tk.Tk):
     def __init__(self) -> None:
@@ -22,11 +23,16 @@ class PressureMatrixApp(tk.Tk):
         self.geometry("980x620")
         self.minsize(900, 560)
         self.runtime_profile = HEATMAP_PROFILE
-        self._live_thread = None
-        self._live_running = True
+        self._live_thread: threading.Thread | None = None
+        self._live_stop_event = threading.Event()
+        self._live_serial: serial.Serial | None = None
+        self._live_serial_lock = threading.Lock()
+        self._live_frame_lock = threading.Lock()
+        self._live_latest_frame = None
+        self._live_latest_frame_count = 0
+        self._live_drawn_frame_count = 0
 
         self.com_var = tk.StringVar(value=self.runtime_profile.port)
-        self._serial = None
         self.label_var = tk.StringVar(value="class_a")
         self.duration_var = tk.StringVar(value="5")
         self.frame_count_var = tk.StringVar(value="64")
@@ -46,6 +52,8 @@ class PressureMatrixApp(tk.Tk):
         self._build_heatmap()
         self.refresh_dataset_browser()
         self._refresh_com_ports()
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
+        self.after(0, self._start_live_preview)
 
 
     
@@ -230,7 +238,7 @@ class PressureMatrixApp(tk.Tk):
         dataset_root = Path(self.dataset_root_var.get()).expanduser()
         self._set_capture_ui_enabled(False)
         self.progress_var.set(0.0)
-        self.status_var.set("Capturing live sensor data...")
+        self.status_var.set("Preparing capture...")
         self.frame_count_status_var.set("0 frames captured")
 
         def frame_callback(frame, frame_count: int) -> None:
@@ -246,25 +254,30 @@ class PressureMatrixApp(tk.Tk):
                 ),
             )
 
-        def worker() -> None:
-            try:
-                result = capture_and_save_recording(
-                    profile=self.runtime_profile,
-                    dataset_root=dataset_root,
-                    label=label,
-                    duration_seconds=duration_seconds,
-                    target_frame_count=target_frame_count,
-                    frame_callback=frame_callback,
-                    progress_callback=progress_callback,
-                )
-            except Exception as exc:  # pragma: no cover - surfaced in the UI
-                self.after(0, lambda exc=exc: self._capture_failed(exc))
-                return
+        def launch_capture() -> None:
+            self.status_var.set("Capturing live sensor data...")
 
-            self.after(0, lambda result=result: self._capture_succeeded(result))
+            def worker() -> None:
+                try:
+                    result = capture_and_save_recording(
+                        profile=self.runtime_profile,
+                        dataset_root=dataset_root,
+                        label=label,
+                        duration_seconds=duration_seconds,
+                        target_frame_count=target_frame_count,
+                        frame_callback=frame_callback,
+                        progress_callback=progress_callback,
+                    )
+                except Exception as exc:  # pragma: no cover - surfaced in the UI
+                    self.after(0, lambda exc=exc: self._capture_failed(exc))
+                    return
 
-        self._capture_thread = threading.Thread(target=worker, daemon=True)
-        self._capture_thread.start()
+                self.after(0, lambda result=result: self._capture_succeeded(result))
+
+            self._capture_thread = threading.Thread(target=worker, daemon=True)
+            self._capture_thread.start()
+
+        self._stop_live_preview(launch_capture)
 
     def _update_heatmap(self, frame, frame_count: int) -> None:
         
@@ -293,11 +306,13 @@ class PressureMatrixApp(tk.Tk):
             f"{result.raw_frame_count} raw frames -> {result.normalized_frame_count} normalized frames"
         )
         self.refresh_dataset_browser()
+        self._start_live_preview()
 
     def _capture_failed(self, exc: Exception) -> None:
         self._set_capture_ui_enabled(True)
         self.status_var.set("Capture failed.")
         messagebox.showerror("Capture failed", str(exc))
+        self._start_live_preview()
 
     def _set_capture_ui_enabled(self, enabled: bool) -> None:
         state = "normal" if enabled else "disabled"
@@ -311,6 +326,10 @@ class PressureMatrixApp(tk.Tk):
         if ports and self.com_var.get() not in ports:
             self.com_var.set(ports[0])
 
+        selected_port = self.com_var.get().strip()
+        if selected_port:
+            self._set_runtime_port(selected_port)
+
     def _connect_com(self):
         port = self.com_var.get()
 
@@ -318,9 +337,10 @@ class PressureMatrixApp(tk.Tk):
             messagebox.showerror("Error", "No COM selected")
             return
 
-        # update profile dynamically
-        #global self.runtime_profile
+        self._set_runtime_port(port)
+        self.status_var.set(f"Connected to {port}")
 
+    def _set_runtime_port(self, port: str) -> None:
         self.runtime_profile = SerialProfile(
             port=port,
             baudrate=self.runtime_profile.baudrate,
@@ -334,8 +354,149 @@ class PressureMatrixApp(tk.Tk):
             vmax=self.runtime_profile.vmax,
         )
 
-        # reopen serial for safety (if needed later)
-        self.status_var.set(f"Connected to {port}")
+    def _start_live_preview(self) -> None:
+        if self._live_thread and self._live_thread.is_alive():
+            return
+
+        self._live_stop_event.clear()
+        with self._live_frame_lock:
+            self._live_latest_frame = None
+            self._live_latest_frame_count = 0
+            self._live_drawn_frame_count = 0
+        self._live_thread = threading.Thread(target=self._live_preview_worker, daemon=True)
+        self._live_thread.start()
+        self.after(0, self._refresh_live_preview_frame)
+
+    def _stop_live_preview(self, on_stopped=None) -> None:
+        self._live_stop_event.set()
+        self._close_live_serial()
+        if on_stopped is not None:
+            self._wait_for_live_preview_stop(on_stopped)
+
+    def _wait_for_live_preview_stop(self, on_stopped) -> None:
+        if self._live_thread and self._live_thread.is_alive():
+            self.after(50, lambda: self._wait_for_live_preview_stop(on_stopped))
+            return
+
+        self._live_thread = None
+        on_stopped()
+
+    def _close_live_serial(self) -> None:
+        with self._live_serial_lock:
+            live_serial = self._live_serial
+            self._live_serial = None
+
+        if live_serial is not None:
+            try:
+                live_serial.close()
+            except Exception:
+                pass
+
+    def _publish_status(self, message: str) -> None:
+        try:
+            self.after(0, lambda message=message: self.status_var.set(message))
+        except tk.TclError:
+            pass
+
+    def _live_preview_worker(self) -> None:
+        live_serial = None
+        connected_port = None
+        frame_count = 0
+        last_message = None
+
+        try:
+            while not self._live_stop_event.is_set():
+                profile = self.runtime_profile
+                port = profile.port.strip()
+
+                if not port:
+                    message = "No COM port selected for live preview."
+                    if last_message != message:
+                        self._publish_status(message)
+                        last_message = message
+                    self._close_live_serial()
+                    live_serial = None
+                    connected_port = None
+                    time.sleep(0.5)
+                    continue
+
+                if live_serial is None or connected_port != port:
+                    self._close_live_serial()
+                    try:
+                        live_serial = open_serial(profile)
+                    except Exception as exc:
+                        message = f"Live preview waiting for {port}: {exc}"
+                        if last_message != message:
+                            self._publish_status(message)
+                            last_message = message
+                        time.sleep(1.0)
+                        continue
+
+                    with self._live_serial_lock:
+                        self._live_serial = live_serial
+
+                    connected_port = port
+                    message = f"Live preview connected to {port}."
+                    if last_message != message:
+                        self._publish_status(message)
+                        last_message = message
+
+                try:
+                    packet = read_one_packet(live_serial, profile)
+                except Exception as exc:
+                    message = f"Live preview disconnected from {connected_port}: {exc}"
+                    if last_message != message:
+                        self._publish_status(message)
+                        last_message = message
+                    self._close_live_serial()
+                    live_serial = None
+                    connected_port = None
+                    time.sleep(0.5)
+                    continue
+
+                if packet is None:
+                    continue
+
+                try:
+                    frame = packet_to_grid(packet, profile)
+                except Exception as exc:
+                    message = f"Live preview data error: {exc}"
+                    if last_message != message:
+                        self._publish_status(message)
+                        last_message = message
+                    continue
+
+                frame_count += 1
+                with self._live_frame_lock:
+                    self._live_latest_frame = frame
+                    self._live_latest_frame_count = frame_count
+        finally:
+            self._close_live_serial()
+            self._live_thread = None
+
+    def _on_close(self) -> None:
+        self._stop_live_preview()
+        self.destroy()
+
+    def _refresh_live_preview_frame(self) -> None:
+        if self._live_stop_event.is_set():
+            return
+
+        frame_to_draw = None
+        frame_count = 0
+        with self._live_frame_lock:
+            if self._live_latest_frame is not None and self._live_latest_frame_count != self._live_drawn_frame_count:
+                frame_to_draw = self._live_latest_frame
+                frame_count = self._live_latest_frame_count
+                self._live_drawn_frame_count = frame_count
+
+        if frame_to_draw is not None:
+            try:
+                self._update_heatmap(frame_to_draw, frame_count)
+            except tk.TclError:
+                return
+
+        self.after(50, self._refresh_live_preview_frame)
     
         
 def main() -> None:

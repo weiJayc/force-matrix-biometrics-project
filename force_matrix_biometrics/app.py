@@ -224,7 +224,6 @@ class PressureMatrixApp(tk.Tk):
             return
 
         try:
-            duration_seconds = float(self.duration_var.get())
             target_frame_count = int(self.frame_count_var.get())
         except ValueError:
             messagebox.showerror("Invalid input", "Duration and fixed frames must be numeric values.")
@@ -244,12 +243,12 @@ class PressureMatrixApp(tk.Tk):
         def frame_callback(frame, frame_count: int) -> None:
             self.after(0, lambda frame=frame, frame_count=frame_count: self._update_heatmap(frame, frame_count))
 
-        def progress_callback(progress: float, elapsed_seconds: float, frame_count: int) -> None:
+        def progress_callback(progress: float,  frame_count: int) -> None:
             self.after(
                 0,
-                lambda progress=progress, elapsed_seconds=elapsed_seconds, frame_count=frame_count: self._update_progress(
+                lambda progress=progress,  frame_count=frame_count: self._update_progress(
                     progress,
-                    elapsed_seconds,
+                    #elapsed_seconds,
                     frame_count,
                 ),
             )
@@ -263,10 +262,10 @@ class PressureMatrixApp(tk.Tk):
                         profile=self.runtime_profile,
                         dataset_root=dataset_root,
                         label=label,
-                        duration_seconds=duration_seconds,
                         target_frame_count=target_frame_count,
                         frame_callback=frame_callback,
                         progress_callback=progress_callback,
+
                     )
                 except Exception as exc:  # pragma: no cover - surfaced in the UI
                     self.after(0, lambda exc=exc: self._capture_failed(exc))
@@ -290,10 +289,10 @@ class PressureMatrixApp(tk.Tk):
 
         self.frame_count_status_var.set(f"{frame_count} frames captured")
 
-    def _update_progress(self, progress: float, elapsed_seconds: float, frame_count: int) -> None:
+    def _update_progress(self, progress: float, frame_count: int) -> None:
         self.progress_var.set(progress)
         self.status_var.set(
-            f"Recording in progress: {elapsed_seconds:.1f}s elapsed, {frame_count} valid frames collected."
+            f"Captured {frame_count} frames"
         )
 
     def _capture_succeeded(self, result) -> None:

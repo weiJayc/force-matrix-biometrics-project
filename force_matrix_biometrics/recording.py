@@ -14,7 +14,7 @@ from .config import SerialProfile
 from .serial_io import open_serial, packet_to_grid, read_one_packet
 
 FrameCallback = Callable[[np.ndarray, int], None]
-ProgressCallback = Callable[[float, float, int], None]
+ProgressCallback = Callable[[float, int], None]
 
 
 @dataclass(frozen=True)
@@ -64,52 +64,47 @@ def build_recording_path(dataset_root: str | Path, label: str, timestamp: dateti
     return Path(dataset_root) / safe_label / f"{timestamp.strftime('%Y%m%d_%H%M%S_%f')}.csv"
 
 
-def capture_frames_for_duration(
+def capture_frames_by_count(
     profile: SerialProfile,
-    duration_seconds: float,
+    target_frame_count: int,
     frame_callback: FrameCallback | None = None,
     progress_callback: ProgressCallback | None = None,
 ) -> list[np.ndarray]:
-    if duration_seconds <= 0:
-        raise ValueError("duration_seconds must be greater than zero")
+
+    if target_frame_count <= 0:
+        raise ValueError("target_frame_count must be greater than zero")
 
     ser = open_serial(profile)
     frames: list[np.ndarray] = []
-    raw_packets: list[bytes] = []
-    start = time.monotonic()
-    deadline = start + duration_seconds
 
     try:
-        while time.monotonic() < deadline:
-            
+        while len(frames) < target_frame_count:
+
             packet = read_one_packet(ser, profile)
-            
+
             if packet is None:
-                if progress_callback:
-                    elapsed = min(time.monotonic() - start, duration_seconds)
-                    progress_callback(min(elapsed / duration_seconds, 1.0), elapsed, len(frames))
                 continue
 
-            raw_packets.append(packet)
             grid = packet_to_grid(packet, profile)
             frames.append(np.array(grid, copy=True))
 
-            elapsed = min(time.monotonic() - start, duration_seconds)
+            # callback
             if frame_callback:
                 frame_callback(frames[-1], len(frames))
+
             if progress_callback:
-                progress_callback(min(elapsed / duration_seconds, 1.0), elapsed, len(frames))
+                progress_callback(
+                    len(frames) / target_frame_count,  # progress (0~1)
+                    len(frames),                        # frame count
+                )
+
     finally:
         ser.close()
 
     if not frames:
         raise RuntimeError("No valid sensor frames were captured")
 
-    if progress_callback:
-        progress_callback(1.0, duration_seconds, len(frames))
-
-    return frames, raw_packets
-
+    return frames
 
 def save_recording_csv(
     packets: list[bytes],
@@ -129,7 +124,8 @@ def save_recording_csv(
         writer.writerow(header)
 
         for frame_index, packet in enumerate(packets):
-            hex_str = " ".join(f"{b:02x}" for b in packet)
+            arr = np.asarray(packet).reshape(-1)   # flatten
+            hex_str = " ".join(f"{int(b):02x}" for b in arr)
             writer.writerow([label, frame_index, hex_str])
 
     return output_path
@@ -173,20 +169,19 @@ def capture_and_save_recording(
     profile: SerialProfile,
     dataset_root: str | Path,
     label: str,
-    duration_seconds: float,
     target_frame_count: int,
     frame_callback: FrameCallback | None = None,
     progress_callback: ProgressCallback | None = None,
 ) -> RecordingResult:
     sanitized_label = sanitize_label(label)
 
-    print(f"[INFO] Start capture: {duration_seconds}s, target={target_frame_count}")
+    print(f"[INFO] Start capture: {target_frame_count} frames")
     print(f"[INFO] Dataset root: {dataset_root}")
     print(f"[INFO] Label: {sanitized_label}")
 
-    captured_frames, raw_packets = capture_frames_for_duration(
+    captured_frames = capture_frames_by_count(
         profile=profile,
-        duration_seconds=duration_seconds,
+        target_frame_count=target_frame_count,
         frame_callback=frame_callback,
         progress_callback=progress_callback,
     )
@@ -203,7 +198,7 @@ def capture_and_save_recording(
     recording_path = build_recording_path(dataset_root, sanitized_label)
     print(f"[INFO] Saving to: {recording_path}")
 
-    csv_path = save_recording_csv(raw_packets, recording_path, sanitized_label)
+    csv_path = save_recording_csv(captured_frames, recording_path, sanitized_label)
 
     print(f"[INFO] Saved CSV: {csv_path}")
 

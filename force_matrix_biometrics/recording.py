@@ -69,7 +69,7 @@ def capture_frames_for_duration(
     duration_seconds: float,
     frame_callback: FrameCallback | None = None,
     progress_callback: ProgressCallback | None = None,
-) -> list[np.ndarray]:
+) -> tuple[list[np.ndarray], list[bytes]]:
     if duration_seconds <= 0:
         raise ValueError("duration_seconds must be greater than zero")
 
@@ -112,25 +112,33 @@ def capture_frames_for_duration(
 
 
 def save_recording_csv(
-    packets: list[bytes],
+    frames: list[np.ndarray],
     csv_path: str | Path,
     label: str,
 ) -> Path:
-    if not packets:
-        raise ValueError("packets cannot be empty")
+    if not frames:
+        raise ValueError("frames cannot be empty")
 
     output_path = Path(csv_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    header = ["label", "frame_index", "hex_packet"]
+    frame_shape = frames[0].shape
+    if len(frame_shape) != 2:
+        raise ValueError("frames must be 2D arrays")
+
+    row_count, col_count = frame_shape
+    header = ["label", "frame_index"] + [f"value_{index}" for index in range(row_count * col_count)]
 
     with output_path.open("w", newline="", encoding="utf-8") as file:
         writer = csv.writer(file)
         writer.writerow(header)
 
-        for frame_index, packet in enumerate(packets):
-            hex_str = " ".join(f"{b:02x}" for b in packet)
-            writer.writerow([label, frame_index, hex_str])
+        for frame_index, frame in enumerate(frames):
+            array = np.asarray(frame)
+            if array.shape != frame_shape:
+                raise ValueError("all frames must have the same shape")
+            values = [int(value) for value in array.reshape(-1)]
+            writer.writerow([label, frame_index, *values])
 
     return output_path
 
@@ -143,17 +151,33 @@ def load_recording_csv(csv_path: str | Path) -> LoadedRecording:
     with path.open("r", newline="", encoding="utf-8") as file:
         reader = csv.DictReader(file)
         value_columns = [name for name in (reader.fieldnames or []) if name.startswith("value_")]
-        if not value_columns:
-            raise ValueError(f"No frame values found in {path}")
+        if value_columns:
+            for row in reader:
+                if row.get("label"):
+                    label = row["label"]
+                values = [int(row[column]) for column in value_columns]
+                edge = int(len(values) ** 0.5)
+                if edge * edge != len(values):
+                    raise ValueError(f"Recording {path} does not contain a square frame")
+                frames.append(np.array(values, dtype=np.uint16).reshape(edge, edge))
+        elif "hex_packet" in (reader.fieldnames or []):
+            for row in reader:
+                if row.get("label"):
+                    label = row["label"]
 
-        for row in reader:
-            if row.get("label"):
-                label = row["label"]
-            values = [int(row[column]) for column in value_columns]
-            edge = int(len(values) ** 0.5)
-            if edge * edge != len(values):
-                raise ValueError(f"Recording {path} does not contain a square frame")
-            frames.append(np.array(values, dtype=np.uint16).reshape(edge, edge))
+                hex_packet = row.get("hex_packet", "").strip()
+                if not hex_packet:
+                    continue
+
+                packet = bytes.fromhex(hex_packet)
+                payload = packet[2:-1]
+                values = np.frombuffer(payload, dtype="<u2")
+                edge = int(len(values) ** 0.5)
+                if edge * edge != len(values):
+                    raise ValueError(f"Recording {path} does not contain a square frame")
+                frames.append(values.reshape(edge, edge))
+        else:
+            raise ValueError(f"No frame values found in {path}")
 
     if not frames:
         raise ValueError(f"Recording {path} does not contain any frames")
@@ -203,7 +227,7 @@ def capture_and_save_recording(
     recording_path = build_recording_path(dataset_root, sanitized_label)
     print(f"[INFO] Saving to: {recording_path}")
 
-    csv_path = save_recording_csv(raw_packets, recording_path, sanitized_label)
+    csv_path = save_recording_csv(normalized_frames, recording_path, sanitized_label)
 
     print(f"[INFO] Saved CSV: {csv_path}")
 

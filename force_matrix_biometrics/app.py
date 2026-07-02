@@ -6,10 +6,14 @@ import tkinter as tk
 import serial
 import serial.tools.list_ports
 from pathlib import Path
+from collections.abc import Sequence
 from tkinter import filedialog, messagebox, ttk
 
+import numpy as np
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
+from matplotlib.image import AxesImage
+from matplotlib.text import Text
 
 from .profiles import HEATMAP_PROFILE
 from .recording import capture_and_save_recording, discover_recording_csv_files, load_recording_csv
@@ -43,10 +47,15 @@ class PressureMatrixApp(tk.Tk):
         self.preview_status_var = tk.StringVar(value="No saved recording selected.")
 
         self._capture_thread: threading.Thread | None = None
-        self._heatmap_image = None
-        self._heatmap_texts: list[list[object]] = []
+        self._heatmap_image: AxesImage | None = None
+        self._heatmap_texts: list[list[Text]] = []
         self._preview_files: list[Path] = []
         self._current_preview_index = 0
+        self._preview_playback_job: str | None = None
+        self._preview_playback_frames: list[np.ndarray] = []
+        self._preview_playback_index = 0
+        self._preview_playback_label = ""
+        self._preview_playback_source = ""
 
         self._build_layout()
         self._build_heatmap()
@@ -209,10 +218,70 @@ class PressureMatrixApp(tk.Tk):
             messagebox.showerror("Preview failed", str(exc))
             return
 
-        self._show_preview_frame(loaded.frames[0])
-        self.preview_status_var.set(f"Previewing {loaded.label}: {path.name}")
+        self._start_preview_playback(loaded.frames, loaded.label, path.name)
+
+    def _start_preview_playback(self, frames: Sequence[np.ndarray], label: str, source_name: str) -> None:
+        if not frames:
+            messagebox.showinfo("Preview", "The selected recording does not contain any frames.")
+            return
+
+        def begin_playback() -> None:
+            self._stop_preview_playback()
+            self._preview_playback_frames = list(frames)
+            self._preview_playback_index = 0
+            self._preview_playback_label = label
+            self._preview_playback_source = source_name
+
+            self.preview_status_var.set(f"Playing {label}: {source_name}")
+            self.status_var.set(f"Playing saved recording: {label}")
+            self._play_next_preview_frame()
+
+        self._stop_live_preview(begin_playback)
+
+    def _play_next_preview_frame(self) -> None:
+        if self._preview_playback_index >= len(self._preview_playback_frames):
+            self.preview_status_var.set(
+                f"Finished playing {self._preview_playback_label}: {self._preview_playback_source}"
+            )
+            self.status_var.set(
+                f"Finished playing saved recording: {self._preview_playback_label}"
+            )
+            return
+
+        frame = self._preview_playback_frames[self._preview_playback_index]
+        frame_count = self._preview_playback_index + 1
+        self._show_preview_frame(frame)
+        self.frame_count_status_var.set(
+            f"Preview frame {frame_count}/{len(self._preview_playback_frames)}"
+        )
+        self._preview_playback_index += 1
+
+        if self._preview_playback_index < len(self._preview_playback_frames):
+            self._preview_playback_job = self.after(80, self._play_next_preview_frame)
+        else:
+            self.preview_status_var.set(
+                f"Finished playing {self._preview_playback_label}: {self._preview_playback_source}"
+            )
+            self.status_var.set(
+                f"Finished playing saved recording: {self._preview_playback_label}"
+            )
+            self._preview_playback_job = None
+
+    def _stop_preview_playback(self) -> None:
+        if self._preview_playback_job is not None:
+            try:
+                self.after_cancel(self._preview_playback_job)
+            except tk.TclError:
+                pass
+            self._preview_playback_job = None
+
+        self._preview_playback_frames = []
+        self._preview_playback_index = 0
+        self._preview_playback_label = ""
+        self._preview_playback_source = ""
 
     def _show_preview_frame(self, frame) -> None:
+        assert self._heatmap_image is not None
         self._heatmap_image.set_data(frame)
         for row_index, row in enumerate(frame):
             for col_index, value in enumerate(row):
@@ -222,6 +291,8 @@ class PressureMatrixApp(tk.Tk):
     def _start_capture(self) -> None:
         if self._capture_thread and self._capture_thread.is_alive():
             return
+
+        self._stop_preview_playback()
 
         try:
             duration_seconds = float(self.duration_var.get())
@@ -280,7 +351,7 @@ class PressureMatrixApp(tk.Tk):
         self._stop_live_preview(launch_capture)
 
     def _update_heatmap(self, frame, frame_count: int) -> None:
-        
+        assert self._heatmap_image is not None
         self._heatmap_image.set_data(frame)
         for row_index, row in enumerate(frame):
             for col_index, value in enumerate(row):
@@ -475,6 +546,7 @@ class PressureMatrixApp(tk.Tk):
             self._live_thread = None
 
     def _on_close(self) -> None:
+        self._stop_preview_playback()
         self._stop_live_preview()
         self.destroy()
 

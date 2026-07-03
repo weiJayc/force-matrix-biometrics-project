@@ -38,7 +38,6 @@ class PressureMatrixApp(tk.Tk):
 
         self.com_var = tk.StringVar(value=self.runtime_profile.port)
         self.label_var = tk.StringVar(value="class_a")
-        self.duration_var = tk.StringVar(value="5")
         self.frame_count_var = tk.StringVar(value="64")
         self.dataset_root_var = tk.StringVar(value=str(Path.cwd() / "dataset"))
         self.status_var = tk.StringVar(value="Ready to capture a labeled recording.")
@@ -80,11 +79,8 @@ class PressureMatrixApp(tk.Tk):
         ttk.Label(control_frame, text="Class label").grid(row=0, column=0, sticky="w")
         ttk.Entry(control_frame, textvariable=self.label_var, width=24).grid(row=0, column=1, sticky="ew", padx=(8, 24))
 
-        ttk.Label(control_frame, text="Duration (seconds)").grid(row=0, column=2, sticky="w")
-        ttk.Entry(control_frame, textvariable=self.duration_var, width=12).grid(row=0, column=3, sticky="ew", padx=(8, 24))
-
-        ttk.Label(control_frame, text="Fixed frames").grid(row=0, column=4, sticky="w")
-        ttk.Entry(control_frame, textvariable=self.frame_count_var, width=12).grid(row=0, column=5, sticky="ew", padx=(8, 24))
+        ttk.Label(control_frame, text="Fixed frames").grid(row=0, column=2, sticky="w")
+        ttk.Entry(control_frame, textvariable=self.frame_count_var, width=12).grid(row=0, column=3, sticky="ew", padx=(8, 24))
 
         ttk.Label(control_frame, text="Dataset root").grid(row=1, column=0, sticky="w", pady=(12, 0))
         ttk.Entry(control_frame, textvariable=self.dataset_root_var).grid(row=1, column=1, columnspan=3, sticky="ew", padx=(8, 8), pady=(12, 0))
@@ -297,7 +293,7 @@ class PressureMatrixApp(tk.Tk):
         try:
             target_frame_count = int(self.frame_count_var.get())
         except ValueError:
-            messagebox.showerror("Invalid input", "Duration and fixed frames must be numeric values.")
+            messagebox.showerror("Invalid input", "Fixed frames must be numeric values.")
             return
 
         label = self.label_var.get().strip()

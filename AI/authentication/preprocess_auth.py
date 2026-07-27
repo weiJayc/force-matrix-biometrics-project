@@ -5,7 +5,7 @@ import numpy as np
 
 from data_loader import load_dataset
 from preprocess import flatten_samples, normalize_samples, normalize_with_train
-from authentication.feature_extractor import extract_dataset_features
+from authentication.feature_extractor import extract_hybrid_features
 
 
 def prepare_authentication_data(
@@ -65,9 +65,9 @@ def prepare_authentication_data(
         shuffle=True,
     )
 
-    user_train_features = extract_dataset_features(user_train)
-    user_test_features = extract_dataset_features(user_test)
-    impostor_features = extract_dataset_features(impostor_samples)
+    user_train_features = extract_hybrid_features(user_train)
+    user_test_features = extract_hybrid_features(user_test)
+    impostor_features = extract_hybrid_features(impostor_samples)
 
     print("\n========== Authentication Split ==========")
     print("user_train:", user_train.shape)

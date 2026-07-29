@@ -1,31 +1,33 @@
 # Matrix-Force Sensor Biometrics Project
 
-A biometrics system that captures and analyzes pressure distribution patterns using a matrix-force sensor. This project reads sensor data via serial communication and visualizes it as heatmaps for biometric analysis.
+A biometrics system that captures pressure-distribution data from a matrix-force sensor over serial, visualizes it live as a heatmap, records labeled datasets to CSV, and trains classical ML classifiers (KNN, Random Forest) to identify users by their pressure pattern.
 
 ## Overview
 
-This project interfaces with a pressure/force sensor array to capture biometric data. The sensor is configured as a 5×7 matrix (35 data points) that detects pressure distribution across a surface, which can be used for fingerprint recognition, hand geometry analysis, or other pressure-based biometric applications.
+This project interfaces with a matrix-force sensor array to capture biometric data. The sensor is configured as a 4×4 matrix (16 data points) that detects pressure distribution across a surface, used to identify individual users by the pressure pattern they produce.
 
 ## Features
 
-- **Serial Communication**: Reads data from a matrix-force sensor via RS-232 serial connection
-- **Real-time Visualization**: Displays sensor data as heatmaps using matplotlib
-- **Data Logging**: Saves raw sensor packets to files for analysis and calibration
-- **Packet Processing**: Robust packet parsing with header verification (0xAB 0xAA protocol)
+- **Serial Communication**: Reads data from the sensor via a serial connection
+- **Real-time Visualization**: Live heatmap preview using matplotlib, embedded in the desktop app
+- **Labeled Dataset Recording**: Captures fixed-length, per-user recordings and saves them as CSV
+- **Dataset Playback**: Replays a saved recording through the same heatmap widget
+- **Classifier Training**: KNN and Random Forest pipelines for user identification (`AI/`)
 
 ## Hardware Requirements
 
-- Matrix-Force Sensor Array (5×7 grid configuration)
-- Serial connection (COM3 at 115200 baud rate)
+- Matrix-Force Sensor Array (4×4 grid configuration, 16 pressure points)
+- Serial connection (COM4 at 115200 baud rate)
 - PC/Computer with USB-to-serial converter (if needed)
 
 ## Software Requirements
 
 - Python 3.x
-- Dependencies listed in `requirements.txt`:
+- Core dependencies listed in `requirements.txt`:
    - `numpy` - Numerical operations and data reshaping
-   - `matplotlib` - Real-time heatmap visualization
+   - `matplotlib` - Heatmap visualization
    - `pyserial` - Serial communication with the sensor
+- `pandas` and `scikit-learn` are also required for the `AI/` training scripts (pulled in indirectly — verify they're installed before running training scripts)
 
 ## Installation
 
@@ -35,122 +37,100 @@ This project interfaces with a pressure/force sensor array to capture biometric 
    ```
 
 2. **Configure Serial Connection:**
-   - Ensure the sensor is connected to COM3
+   - Ensure the sensor is connected to COM4
    - Verify baud rate is 115200
-   - (Modify `PORT` variable in the scripts if using a different COM port)
+   - Change the port in `force_matrix_biometrics/profiles.py` if using a different COM port
 
 ## Project Structure
 
 ```
 .
-├── catch.py                     # Legacy entrypoint for count-based capture
-├── heatmap_serial_sample.py      # Legacy entrypoint for the heatmap viewer
-├── timeCatch.py                  # Legacy entrypoint for timed capture
-├── force_matrix_biometrics/      # Shared package for serial + visualization logic
-├── press_img.txt                 # Log file containing captured sensor packets
-├── requirements.txt              # Python dependencies
-└── README.md                     # This file
+├── desktop_app.py                 # Primary entrypoint: Tkinter GUI for dataset recording + live preview + playback
+├── build_exe.ps1                  # Builds a standalone Windows executable (PyInstaller) from desktop_app.py
+├── force_matrix_biometrics/       # Core library: serial I/O, capture, recording, visualization, GUI
+│   ├── config.py                  # SerialProfile dataclass (frozen)
+│   ├── profiles.py                # Concrete serial profiles (COUNT_CAPTURE_PROFILE, TIMED_CAPTURE_PROFILE, HEATMAP_PROFILE)
+│   ├── serial_io.py                # Packet reading + header sync + grid decoding
+│   ├── capture.py                  # Packet-oriented capture/logging
+│   ├── recording.py                # Frame-oriented capture -> normalize -> CSV pipeline
+│   ├── visualization.py             # Matplotlib heatmap loop
+│   └── app.py                      # Tkinter GUI (PressureMatrixApp)
+├── AI/                              # Offline model training (run with AI/ as the working directory)
+│   ├── data_loader.py               # Loads dataset/*.csv into (50, 16) arrays
+│   ├── preprocess.py                # Label encoding, train/test split, per-channel normalization
+│   ├── train_knn.py
+│   ├── train_random_forest.py
+│   └── cross_validation_knn.py
+├── dataset/                         # Recorded training datasets: dataset/<label>/<timestamp>.csv
+├── test_dataset/                    # Additional recorded datasets used for experimentation
+├── requirements.txt                 # Python dependencies
+└── README.md                        # This file
 ```
 
 ## Usage
 
+### Desktop app (primary entrypoint)
+
+```bash
+python desktop_app.py
+```
+
+This is the actively developed interface for data collection: it shows a live heatmap preview, records a fixed number of frames per label, saves recordings as CSV, and can browse/play back existing recordings.
+
 ### Build a standalone EXE
 
-Run the PowerShell build script to generate a single-file Windows executable:
+```powershell
+.\build_exe.ps1
+```
+
+The built executable will appear in `dist\PressureMatrixCollector.exe` by default (override with `.\build_exe.ps1 -Name Foo`). It wraps `desktop_app.py` via PyInstaller.
+
+### Train classifiers
 
 ```powershell
-.uild_exe.ps1
+cd AI
+python train_knn.py              # KNN train/test split + accuracy, confusion matrix, classification report
+python train_random_forest.py    # Same pipeline with RandomForestClassifier
+python cross_validation_knn.py   # StratifiedKFold CV sweep over k in [1,3,5,7,9,11]
 ```
-
-The built executable will appear in `dist\PressureMatrixCollector.exe` by default. The script uses the Tkinter desktop launcher in `desktop_app.py`.
-
-### 1. **Real-time Heatmap Visualization**
-
-Run `heatmap_serial_sample.py` to continuously capture and display sensor data as a heatmap:
-
-```bash
-python heatmap_serial_sample.py
-```
-
-This script will:
-- Connect to the sensor on COM3 at 115200 baud
-- Read sensor packets in real-time
-- Display each 5×7 grid as a color heatmap
-- Update continuously as new data arrives
-
-### 2. **Capture and Log Sensor Data**
-
-Run `catch.py` to record sensor packets to `press_img.txt`:
-
-```bash
-python catch.py
-```
-
-This script will:
-- Read 17 sensor packets (configurable)
-- Save each packet as hexadecimal data to `press_img.txt`
-- Wait 3 seconds between captures (configurable)
 
 ## Data Format
 
 ### Packet Structure
-- **Header**: 2 bytes (`0xAB 0xAA`)
-- **Payload**: 33 bytes (35 byte total packet size)
-- **Data Layout**: 5 rows × 7 columns of 8-bit pressure values
+- **Header**: 2 bytes (`\xAA\x01`)
+- **Payload**: 32 bytes (16 values × 2 bytes each)
 - **Total Packet Size**: 35 bytes
+- **Value Type**: 16-bit unsigned little-endian (`<u2`), range 0–16384
 
 ### Sensor Grid
 ```
-[0][1][2][3][4][5][6]
-[7][8]...
-...
-[28][29][30][31][32][33][34]
+[0][1][2][3]
+[4][5][6][7]
+[8][9][10][11]
+[12][13][14][15]
 ```
 
-Each value represents pressure intensity (0-255) at that sensor point.
+Each value represents pressure intensity at that sensor point.
+
+### Recording CSV Format
+Each recording CSV has the header `label, frame_index, value_0, ..., value_15`, with one row per frame and exactly 50 frames per file (shorter/longer captures are zero-padded/truncated before saving).
 
 ## Configuration
 
 ### Serial Port Settings
-Edit the profile definitions in `force_matrix_biometrics/profiles.py` if you need to change the serial port, baud rate, timeout, or packet layout.
-
-### Sensor Grid Dimensions
-```python
-ROWS = 5                # Number of rows in sensor matrix
-COLS = 7                # Number of columns in sensor matrix
-```
-
-### Data Capture
-In `catch.py`, adjust the `packet_limit` and `delay_seconds` values passed to `capture_packets`.
-
-## Reorganized Layout
-
-The project is now organized around a shared package instead of duplicated script logic:
-
-- `force_matrix_biometrics/serial_io.py` handles packet scanning and decoding
-- `force_matrix_biometrics/capture.py` handles packet logging and timed capture
-- `force_matrix_biometrics/visualization.py` handles the heatmap display
-- `force_matrix_biometrics/profiles.py` stores the active serial layouts for each script
-
-The original root scripts remain as entrypoints so existing commands keep working.
-
-For the desktop app and packaging workflow, use:
-
-```powershell
-python desktop_app.py
-```
+Edit the profile definitions in `force_matrix_biometrics/profiles.py` if you need to change the serial port, baud rate, timeout, or packet layout. Profiles are frozen dataclasses — add a new profile rather than mutating an existing one.
 
 ## Troubleshooting
 
 ### No data received
-- Verify sensor is connected to correct COM port
+- Verify sensor is connected to correct COM port (COM4 by default)
 - Check baud rate matches sensor configuration (115200)
 - Ensure sensor is powered on
 - Verify USB-to-serial driver is installed (if using converter)
 
 ### Serial connection errors
 - List available COM ports: `python -m serial.tools.list_ports`
-- Update `PORT` variable to the correct port
+- Update the port in `force_matrix_biometrics/profiles.py` to the correct port
 - Ensure no other application is using the COM port
 
 ### Heatmap not displaying
@@ -160,11 +140,9 @@ python desktop_app.py
 
 ## Future Enhancements
 
-- Add biometric feature extraction (fingerprint minutiae, pressure patterns)
-- Implement machine learning classification for biometric matching
-- Add GUI for real-time monitoring and configuration
+- Add biometric feature extraction beyond raw pressure frames
+- Expand classifier coverage beyond KNN/Random Forest
 - Support multiple sensors or sensor arrays
-- Add data preprocessing and normalization
 - Implement touch/pressure event detection
 
 ## License

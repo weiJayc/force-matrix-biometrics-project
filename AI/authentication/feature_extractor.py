@@ -2,6 +2,8 @@ from typing import Optional, Sequence
 
 import numpy as np
 
+from preprocess import flatten_samples, normalize_samples
+
 
 DEFAULT_CONTACT_THRESHOLD: float = 1000.0
 RAW_SENSOR_COUNT: int = 16
@@ -207,6 +209,43 @@ def extract_feature_combination(
         return X_combined
 
     raise ValueError(f"Expected 1D or 3D input, got shape {X.shape}")
+
+
+def prepare_feature_vectors(
+    X: np.ndarray,
+    feature_names: Optional[Sequence[str]] = None,
+    contact_threshold: float = DEFAULT_CONTACT_THRESHOLD,
+    sensor_min: Optional[np.ndarray] = None,
+    sensor_max: Optional[np.ndarray] = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    將原始 samples 轉成共用的特徵向量，並依照指定的 normalization statistics 做正規化。
+
+    Returns
+    -------
+    tuple[ndarray, ndarray, ndarray, ndarray]
+        (flattened_vectors, normalized_features, sensor_min, sensor_max)
+    """
+
+    if feature_names is None:
+        feature_names = ENGINEERED_FEATURE_ORDER
+
+    X = np.asarray(X, dtype=np.float32)
+    features = extract_feature_combination(
+        X,
+        feature_names=feature_names,
+        contact_threshold=contact_threshold,
+    )
+
+    if sensor_min is None or sensor_max is None:
+        flat_features = features.reshape(-1, features.shape[-1])
+        sensor_min = flat_features.min(axis=0).astype(np.float32)
+        sensor_max = flat_features.max(axis=0).astype(np.float32)
+
+    normalized_features = normalize_samples(features, sensor_min, sensor_max)
+    flattened_vectors = flatten_samples(normalized_features).astype(np.float32)
+
+    return flattened_vectors, normalized_features, sensor_min, sensor_max
 
 
 def extract_hybrid_features(

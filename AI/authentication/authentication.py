@@ -5,11 +5,9 @@ from typing import Optional
 
 import numpy as np
 
-from authentication.feature_extractor import extract_feature_combination
-from authentication.knn_auth import KNNAuthenticator
+from authentication.feature_extractor import ENGINEERED_FEATURE_ORDER, prepare_feature_vectors
 from authentication.template import UserTemplate
 from authentication.threshold import UserThreshold
-from preprocess import flatten_samples
 
 
 @dataclass
@@ -24,8 +22,8 @@ class AuthenticationResult:
 class AuthenticationSystem:
     """Perform user authentication against a stored template and threshold."""
 
-    def __init__(self, feature_names: tuple[str, ...] = ()) -> None:
-        self.feature_names = feature_names
+    def __init__(self, feature_names: tuple[str, ...] | None = None) -> None:
+        self.feature_names = feature_names if feature_names is not None else ENGINEERED_FEATURE_ORDER
 
     def authenticate(
         self,
@@ -37,8 +35,12 @@ class AuthenticationSystem:
         if sample.ndim != 3:
             raise ValueError(f"Expected 3D sample, got shape {sample.shape}")
 
-        features = extract_feature_combination(sample, feature_names=self.feature_names)
-        flattened = flatten_samples(features).astype(np.float32)
+        flattened, _, _, _ = prepare_feature_vectors(
+            sample,
+            feature_names=self.feature_names,
+            sensor_min=template.sensor_min,
+            sensor_max=template.sensor_max,
+        )
 
         template_vector = template.feature_vector.astype(np.float32, copy=False)
         if flattened.shape[1] != template_vector.shape[0]:

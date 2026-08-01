@@ -16,6 +16,8 @@ class UserTemplate:
     feature_vector: np.ndarray
     feature_names: tuple[str, ...] = field(default_factory=tuple)
     created_at: Optional[str] = None
+    sensor_min: Optional[np.ndarray] = None
+    sensor_max: Optional[np.ndarray] = None
 
     def to_dict(self) -> dict:
         return {
@@ -23,6 +25,8 @@ class UserTemplate:
             "feature_vector": self.feature_vector.tolist(),
             "feature_names": list(self.feature_names),
             "created_at": self.created_at,
+            "sensor_min": None if self.sensor_min is None else self.sensor_min.tolist(),
+            "sensor_max": None if self.sensor_max is None else self.sensor_max.tolist(),
         }
 
     @classmethod
@@ -32,6 +36,16 @@ class UserTemplate:
             feature_vector=np.asarray(payload["feature_vector"], dtype=np.float32),
             feature_names=tuple(payload.get("feature_names", [])),
             created_at=payload.get("created_at"),
+            sensor_min=(
+                None
+                if payload.get("sensor_min") is None
+                else np.asarray(payload["sensor_min"], dtype=np.float32)
+            ),
+            sensor_max=(
+                None
+                if payload.get("sensor_max") is None
+                else np.asarray(payload["sensor_max"], dtype=np.float32)
+            ),
         )
 
 

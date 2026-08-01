@@ -6,10 +6,9 @@ from typing import Optional, Tuple
 
 import numpy as np
 
-from authentication.feature_extractor import extract_feature_combination
+from authentication.feature_extractor import ENGINEERED_FEATURE_ORDER, prepare_feature_vectors
 from authentication.template import TemplateManager, UserTemplate
 from authentication.threshold import ThresholdManager, UserThreshold, compute_threshold_from_distances
-from preprocess import flatten_samples, normalize_samples, normalize_with_train
 
 
 class RegistrationSystem:
@@ -19,36 +18,32 @@ class RegistrationSystem:
         self,
         template_manager: Optional[TemplateManager] = None,
         threshold_manager: Optional[ThresholdManager] = None,
-        feature_names: Tuple[str, ...] = (),
+        feature_names: Tuple[str, ...] | None = None,
         k_value: float = 2.0,
     ) -> None:
         self.template_manager = template_manager or TemplateManager()
         self.threshold_manager = threshold_manager or ThresholdManager()
-        self.feature_names = feature_names
+        self.feature_names = feature_names if feature_names is not None else ENGINEERED_FEATURE_ORDER
         self.k_value = k_value
 
     def register_user(
         self,
         registration_samples: np.ndarray,
         user_id: str,
-    ) -> Tuple[UserTemplate, UserThreshold]:
+        return_details: bool = False,
+    ) -> Tuple[UserTemplate, UserThreshold] | tuple[UserTemplate, UserThreshold, np.ndarray]:
         """Create a centroid template and threshold from registration samples."""
         registration_samples = np.asarray(registration_samples, dtype=np.float32)
         if registration_samples.ndim != 3:
             raise ValueError(f"Expected 3D registration samples, got shape {registration_samples.shape}")
 
-        features = extract_feature_combination(registration_samples, feature_names=self.feature_names)
-        registration_flat = flatten_samples(features)
+        registration_flat, normalized_registration, sensor_min, sensor_max = prepare_feature_vectors(
+            registration_samples,
+            feature_names=self.feature_names,
+        )
 
-        # Use the same normalization strategy as the existing authentication pipeline.
-        registration_flat = registration_flat.astype(np.float32, copy=False)
-        registration_mean = registration_flat.mean(axis=0)
-        registration_std = registration_flat.std(axis=0)
-        registration_std[registration_std == 0] = 1.0
-        normalized_registration = (registration_flat - registration_mean) / registration_std
-
-        centroid = np.mean(normalized_registration, axis=0).astype(np.float32)
-        distances = np.linalg.norm(normalized_registration - centroid, axis=1).astype(np.float32)
+        centroid = np.mean(registration_flat, axis=0).astype(np.float32)
+        distances = np.linalg.norm(registration_flat - centroid, axis=1).astype(np.float32)
         threshold_value = compute_threshold_from_distances(distances, k_value=self.k_value)
 
         template = UserTemplate(
@@ -56,11 +51,15 @@ class RegistrationSystem:
             feature_vector=centroid,
             feature_names=self.feature_names,
             created_at=datetime.utcnow().isoformat(),
+            sensor_min=sensor_min,
+            sensor_max=sensor_max,
         )
         threshold = UserThreshold(user_id=user_id, threshold=threshold_value, k_value=self.k_value)
 
         self.template_manager.save_template(template)
         self.threshold_manager.save_threshold(threshold)
+        if return_details:
+            return template, threshold, distances
         return template, threshold
 
     def get_template(self, user_id: str) -> Optional[UserTemplate]:

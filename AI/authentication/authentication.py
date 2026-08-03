@@ -43,13 +43,27 @@ class AuthenticationSystem:
         )
 
         template_vector = template.feature_vector.astype(np.float32, copy=False)
-        if flattened.shape[1] != template_vector.shape[0]:
-            raise ValueError(
-                f"Feature dimension mismatch: sample={flattened.shape[1]}, template={template_vector.shape[0]}"
-            )
+        usable_feature_mask = template.usable_feature_mask
 
-        normalized_sample = flattened.astype(np.float32, copy=False)
-        normalized_template = template_vector.astype(np.float32, copy=False)
+        if usable_feature_mask is not None:
+            usable_feature_mask = np.asarray(usable_feature_mask, dtype=bool)
+            if flattened.shape[1] != usable_feature_mask.shape[0]:
+                raise ValueError(
+                    f"Feature dimension mismatch: sample={flattened.shape[1]}, mask={usable_feature_mask.shape[0]}"
+                )
+            normalized_sample = flattened[:, usable_feature_mask].astype(np.float32, copy=False)
+            normalized_template = template_vector
+            if normalized_template.shape[0] != int(np.sum(usable_feature_mask)):
+                raise ValueError(
+                    f"Template dimension mismatch: template={normalized_template.shape[0]}, mask={int(np.sum(usable_feature_mask))}"
+                )
+        else:
+            if flattened.shape[1] != template_vector.shape[0]:
+                raise ValueError(
+                    f"Feature dimension mismatch: sample={flattened.shape[1]}, template={template_vector.shape[0]}"
+                )
+            normalized_sample = flattened.astype(np.float32, copy=False)
+            normalized_template = template_vector
 
         distance = float(np.linalg.norm(normalized_sample[0] - normalized_template))
         accept = distance <= threshold.threshold

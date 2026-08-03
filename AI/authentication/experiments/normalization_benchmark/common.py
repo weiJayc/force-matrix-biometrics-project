@@ -53,7 +53,10 @@ class NormalizationBenchmarkRecord:
 @dataclass(frozen=True)
 class UserNormalizationStats:
     user_id: str
+    original_features: int
     zero_range_features: int
+    usable_features: int
+    removed_features: int
     zero_range_ratio: float
     euclidean_mean_genuine: float
     euclidean_mean_impostor: float
@@ -101,6 +104,26 @@ def compute_zero_range_count(vectors: np.ndarray) -> int:
         raise ValueError(f"Expected 2D vectors, got shape {vectors.shape}")
     ranges = vectors.max(axis=0) - vectors.min(axis=0)
     return int(np.sum(ranges == 0))
+
+
+def build_usable_feature_mask(vectors: np.ndarray) -> np.ndarray:
+    vectors = np.asarray(vectors, dtype=np.float32)
+    if vectors.ndim != 2:
+        raise ValueError(f"Expected 2D vectors, got shape {vectors.shape}")
+    ranges = vectors.max(axis=0) - vectors.min(axis=0)
+    return (ranges != 0).astype(bool)
+
+
+def apply_feature_mask(vectors: np.ndarray, usable_feature_mask: np.ndarray) -> np.ndarray:
+    vectors = np.asarray(vectors, dtype=np.float32)
+    usable_feature_mask = np.asarray(usable_feature_mask, dtype=bool)
+    if vectors.ndim != 2:
+        raise ValueError(f"Expected 2D vectors, got shape {vectors.shape}")
+    if vectors.shape[1] != usable_feature_mask.shape[0]:
+        raise ValueError(
+            f"Mask length mismatch: vectors={vectors.shape[1]}, mask={usable_feature_mask.shape[0]}"
+        )
+    return vectors[:, usable_feature_mask].astype(np.float32)
 
 
 def normalize_minmax(vectors: np.ndarray, stats_min: np.ndarray, stats_max: np.ndarray) -> np.ndarray:
@@ -204,7 +227,10 @@ def summarize_user_distance_stats(
     impostor_distances = np.asarray(impostor_distances, dtype=np.float32)
     return UserNormalizationStats(
         user_id=user_id,
+        original_features=0,
         zero_range_features=0,
+        usable_features=0,
+        removed_features=0,
         zero_range_ratio=0.0,
         euclidean_mean_genuine=float(np.mean(genuine_distances)),
         euclidean_mean_impostor=float(np.mean(impostor_distances)),
@@ -257,11 +283,24 @@ def format_benchmark_table(records: Sequence[NormalizationBenchmarkRecord]) -> s
 
 
 def format_zero_range_table(rows: Sequence[UserNormalizationStats]) -> str:
-    headers = ["User", "Zero-Range Features", "Zero-Range Ratio", "Mean Genuine Dist", "Mean Impostor Dist", "Max Impostor Dist"]
+    headers = [
+        "User",
+        "Original Features",
+        "Zero-Range Features",
+        "Usable Features",
+        "Removed Features",
+        "Zero-Range Ratio",
+        "Mean Genuine Dist",
+        "Mean Impostor Dist",
+        "Max Impostor Dist",
+    ]
     table_rows = [
         [
             row.user_id,
+            str(row.original_features),
             str(row.zero_range_features),
+            str(row.usable_features),
+            str(row.removed_features),
             f"{row.zero_range_ratio:.4f}",
             f"{row.euclidean_mean_genuine:.4f}",
             f"{row.euclidean_mean_impostor:.4f}",

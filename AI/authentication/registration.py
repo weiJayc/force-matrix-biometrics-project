@@ -42,8 +42,15 @@ class RegistrationSystem:
             feature_names=self.feature_names,
         )
 
-        centroid = np.mean(registration_flat, axis=0).astype(np.float32)
-        distances = np.linalg.norm(registration_flat - centroid, axis=1).astype(np.float32)
+        feature_ranges = np.max(registration_flat, axis=0) - np.min(registration_flat, axis=0)
+        usable_feature_mask = feature_ranges != 0
+        if not np.any(usable_feature_mask):
+            raise ValueError("No usable features found in registration samples")
+
+        usable_registration_flat = registration_flat[:, usable_feature_mask]
+
+        centroid = np.mean(usable_registration_flat, axis=0).astype(np.float32)
+        distances = np.linalg.norm(usable_registration_flat - centroid, axis=1).astype(np.float32)
         threshold_value = compute_threshold_from_distances(distances, k_value=self.k_value)
 
         template = UserTemplate(
@@ -53,6 +60,7 @@ class RegistrationSystem:
             created_at=datetime.utcnow().isoformat(),
             sensor_min=sensor_min,
             sensor_max=sensor_max,
+            usable_feature_mask=usable_feature_mask,
         )
         threshold = UserThreshold(user_id=user_id, threshold=threshold_value, k_value=self.k_value)
 

@@ -16,7 +16,8 @@ from .common import (
     FEATURE_NAMES,
     NormalizationBenchmarkRecord,
     UserNormalizationStats,
-    calculate_far_frr_acceptance,
+    apply_feature_mask,
+    build_usable_feature_mask,
     compute_cosine_distances,
     compute_euclidean_distances,
     compute_roc_metrics,
@@ -99,32 +100,18 @@ def _apply_normalization(
     raise ValueError(f"Unknown normalization strategy: {strategy}")
 
 
-def _evaluate_distance_metric(
-    user_id: str,
+def _compute_record(
     normalization: str,
     distance_name: str,
-    registration_vectors: np.ndarray,
-    validation_genuine_vectors: np.ndarray,
-    impostor_vectors: np.ndarray,
-) -> tuple[NormalizationBenchmarkRecord, UserNormalizationStats]:
-    template_vector = np.mean(registration_vectors, axis=0).astype(np.float32)
-
-    if distance_name == "Euclidean":
-        genuine_distances = compute_euclidean_distances(validation_genuine_vectors, template_vector)
-        impostor_distances = compute_euclidean_distances(impostor_vectors, template_vector)
-    elif distance_name == "Cosine":
-        genuine_distances = compute_cosine_distances(validation_genuine_vectors, template_vector)
-        impostor_distances = compute_cosine_distances(impostor_vectors, template_vector)
-    else:
-        raise ValueError(f"Unknown distance metric: {distance_name}")
-
+    genuine_distances: np.ndarray,
+    impostor_distances: np.ndarray,
+) -> NormalizationBenchmarkRecord:
     auc, eer, best_threshold, best_far, best_frr, best_acceptance_rate, _, _, _ = compute_roc_metrics(
         genuine_distances,
         impostor_distances,
     )
-
-    record = NormalizationBenchmarkRecord(
-        user_id=user_id,
+    return NormalizationBenchmarkRecord(
+        user_id="all",
         normalization=normalization,
         distance=distance_name,
         threshold=best_threshold,
@@ -137,50 +124,6 @@ def _evaluate_distance_metric(
         average_impostor_distance=float(np.mean(impostor_distances)),
     )
 
-    stats = UserNormalizationStats(
-        user_id=user_id,
-        zero_range_features=0,
-        zero_range_ratio=0.0,
-        euclidean_mean_genuine=float(np.mean(compute_euclidean_distances(validation_genuine_vectors, template_vector))),
-        euclidean_mean_impostor=float(np.mean(compute_euclidean_distances(impostor_vectors, template_vector))),
-        euclidean_max_impostor=float(np.max(compute_euclidean_distances(impostor_vectors, template_vector))),
-    )
-
-    return record, stats
-
-
-def _aggregate_benchmark_records(
-    distance_pool: dict[tuple[str, str], dict[str, list[np.ndarray]]],
-) -> list[NormalizationBenchmarkRecord]:
-    records: list[NormalizationBenchmarkRecord] = []
-
-    for (normalization, distance_name), grouped in sorted(distance_pool.items()):
-        genuine_distances = np.concatenate(grouped["genuine"]) if grouped["genuine"] else np.asarray([], dtype=np.float32)
-        impostor_distances = np.concatenate(grouped["impostor"]) if grouped["impostor"] else np.asarray([], dtype=np.float32)
-
-        auc, eer, best_threshold, best_far, best_frr, best_acceptance_rate, _, _, _ = compute_roc_metrics(
-            genuine_distances,
-            impostor_distances,
-        )
-
-        records.append(
-            NormalizationBenchmarkRecord(
-                user_id="all",
-                normalization=normalization,
-                distance=distance_name,
-                threshold=best_threshold,
-                far=best_far,
-                frr=best_frr,
-                acceptance_rate=best_acceptance_rate,
-                auc=auc,
-                eer=eer,
-                average_genuine_distance=float(np.mean(genuine_distances)),
-                average_impostor_distance=float(np.mean(impostor_distances)),
-            )
-        )
-
-    return records
-
 
 def run_normalization_benchmark(
     X: np.ndarray | None = None,
@@ -192,9 +135,8 @@ def run_normalization_benchmark(
         X, raw_y = load_benchmark_dataset()
 
     global_registration_pool = _build_global_registration_pool(X, raw_y, users, registration_count)
-
-    user_stats: list[UserNormalizationStats] = []
     distance_pool: dict[tuple[str, str], dict[str, list[np.ndarray]]] = {}
+    user_stats: list[UserNormalizationStats] = []
 
     for user_id in users:
         registration_samples, validation_genuine_samples, impostor_samples = select_user_samples(
@@ -208,10 +150,14 @@ def run_normalization_benchmark(
         raw_validation_genuine_vectors = extract_flattened_vectors(validation_genuine_samples, feature_names=FEATURE_NAMES)
         raw_impostor_vectors = extract_flattened_vectors(impostor_samples, feature_names=FEATURE_NAMES)
 
-        zero_range_count = compute_zero_range_count(raw_registration_vectors)
-        zero_range_ratio = zero_range_count / raw_registration_vectors.shape[1]
+        usable_feature_mask = build_usable_feature_mask(raw_registration_vectors)
+        original_features = int(raw_registration_vectors.shape[1])
+        zero_range_features = compute_zero_range_count(raw_registration_vectors)
+        usable_features = int(np.sum(usable_feature_mask))
+        removed_features = original_features - usable_features
+        zero_range_ratio = float(zero_range_features / original_features)
 
-        strategy_stats = {
+        normalized_strategies = {
             "Per-user MinMax": _apply_normalization(
                 "Per-user MinMax",
                 raw_registration_vectors,
@@ -242,36 +188,45 @@ def run_normalization_benchmark(
             ),
         }
 
-        for normalization, (registration_vectors, genuine_vectors, impostor_vectors) in strategy_stats.items():
-            for distance_name in ("Euclidean", "Cosine"):
-                template_vector = np.mean(registration_vectors, axis=0).astype(np.float32)
+        for normalization, (registration_vectors, genuine_vectors, impostor_vectors) in normalized_strategies.items():
+            masked_registration_vectors = apply_feature_mask(registration_vectors, usable_feature_mask)
+            masked_genuine_vectors = apply_feature_mask(genuine_vectors, usable_feature_mask)
+            masked_impostor_vectors = apply_feature_mask(impostor_vectors, usable_feature_mask)
+            template_vector = np.mean(masked_registration_vectors, axis=0).astype(np.float32)
 
-                if distance_name == "Euclidean":
-                    genuine_distances = compute_euclidean_distances(genuine_vectors, template_vector)
-                    impostor_distances = compute_euclidean_distances(impostor_vectors, template_vector)
-                elif distance_name == "Cosine":
-                    genuine_distances = compute_cosine_distances(genuine_vectors, template_vector)
-                    impostor_distances = compute_cosine_distances(impostor_vectors, template_vector)
-                else:
-                    raise ValueError(f"Unknown distance metric: {distance_name}")
+            euclidean_genuine = compute_euclidean_distances(masked_genuine_vectors, template_vector)
+            euclidean_impostor = compute_euclidean_distances(masked_impostor_vectors, template_vector)
+            cosine_genuine = compute_cosine_distances(masked_genuine_vectors, template_vector)
+            cosine_impostor = compute_cosine_distances(masked_impostor_vectors, template_vector)
 
-                distance_pool.setdefault((normalization, distance_name), {"genuine": [], "impostor": []})
-                distance_pool[(normalization, distance_name)]["genuine"].append(np.asarray(genuine_distances, dtype=np.float32))
-                distance_pool[(normalization, distance_name)]["impostor"].append(np.asarray(impostor_distances, dtype=np.float32))
+            distance_pool.setdefault((normalization, "Euclidean"), {"genuine": [], "impostor": []})
+            distance_pool[(normalization, "Euclidean")]["genuine"].append(euclidean_genuine)
+            distance_pool[(normalization, "Euclidean")]["impostor"].append(euclidean_impostor)
 
-        per_user_registration_min = raw_registration_vectors.min(axis=0)
-        per_user_registration_max = raw_registration_vectors.max(axis=0)
-        per_user_registration_vectors = normalize_minmax(raw_registration_vectors, per_user_registration_min, per_user_registration_max)
-        per_user_genuine_vectors = normalize_minmax(raw_validation_genuine_vectors, per_user_registration_min, per_user_registration_max)
-        per_user_impostor_vectors = normalize_minmax(raw_impostor_vectors, per_user_registration_min, per_user_registration_max)
-        per_user_template = np.mean(per_user_registration_vectors, axis=0).astype(np.float32)
-        euclidean_genuine = compute_euclidean_distances(per_user_genuine_vectors, per_user_template)
-        euclidean_impostor = compute_euclidean_distances(per_user_impostor_vectors, per_user_template)
+            distance_pool.setdefault((normalization, "Cosine"), {"genuine": [], "impostor": []})
+            distance_pool[(normalization, "Cosine")]["genuine"].append(cosine_genuine)
+            distance_pool[(normalization, "Cosine")]["impostor"].append(cosine_impostor)
+
+        per_user_min = raw_registration_vectors.min(axis=0)
+        per_user_max = raw_registration_vectors.max(axis=0)
+        per_user_registration_vectors = normalize_minmax(raw_registration_vectors, per_user_min, per_user_max)
+        per_user_genuine_vectors = normalize_minmax(raw_validation_genuine_vectors, per_user_min, per_user_max)
+        per_user_impostor_vectors = normalize_minmax(raw_impostor_vectors, per_user_min, per_user_max)
+
+        per_user_registration_masked = apply_feature_mask(per_user_registration_vectors, usable_feature_mask)
+        per_user_genuine_masked = apply_feature_mask(per_user_genuine_vectors, usable_feature_mask)
+        per_user_impostor_masked = apply_feature_mask(per_user_impostor_vectors, usable_feature_mask)
+        per_user_template = np.mean(per_user_registration_masked, axis=0).astype(np.float32)
+        euclidean_genuine = compute_euclidean_distances(per_user_genuine_masked, per_user_template)
+        euclidean_impostor = compute_euclidean_distances(per_user_impostor_masked, per_user_template)
 
         user_stats.append(
             UserNormalizationStats(
                 user_id=user_id,
-                zero_range_features=zero_range_count,
+                original_features=original_features,
+                zero_range_features=zero_range_features,
+                usable_features=usable_features,
+                removed_features=removed_features,
                 zero_range_ratio=zero_range_ratio,
                 euclidean_mean_genuine=float(np.mean(euclidean_genuine)),
                 euclidean_mean_impostor=float(np.mean(euclidean_impostor)),
@@ -279,7 +234,13 @@ def run_normalization_benchmark(
             )
         )
 
-    return _aggregate_benchmark_records(distance_pool), user_stats
+    records: list[NormalizationBenchmarkRecord] = []
+    for (normalization, distance_name), grouped in sorted(distance_pool.items()):
+        genuine_distances = np.concatenate(grouped["genuine"])
+        impostor_distances = np.concatenate(grouped["impostor"])
+        records.append(_compute_record(normalization, distance_name, genuine_distances, impostor_distances))
+
+    return records, user_stats
 
 
 def main() -> None:

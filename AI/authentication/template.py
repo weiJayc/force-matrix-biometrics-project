@@ -18,6 +18,7 @@ class UserTemplate:
     created_at: Optional[str] = None
     sensor_min: Optional[np.ndarray] = None
     sensor_max: Optional[np.ndarray] = None
+    usable_feature_mask: Optional[np.ndarray] = None
 
     def to_dict(self) -> dict:
         return {
@@ -27,6 +28,9 @@ class UserTemplate:
             "created_at": self.created_at,
             "sensor_min": None if self.sensor_min is None else self.sensor_min.tolist(),
             "sensor_max": None if self.sensor_max is None else self.sensor_max.tolist(),
+            "usable_feature_mask": (
+                None if self.usable_feature_mask is None else self.usable_feature_mask.astype(bool).tolist()
+            ),
         }
 
     @classmethod
@@ -45,6 +49,11 @@ class UserTemplate:
                 None
                 if payload.get("sensor_max") is None
                 else np.asarray(payload["sensor_max"], dtype=np.float32)
+            ),
+            usable_feature_mask=(
+                None
+                if payload.get("usable_feature_mask") is None
+                else np.asarray(payload["usable_feature_mask"], dtype=bool)
             ),
         )
 

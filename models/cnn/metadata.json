@@ -1,0 +1,43 @@
+{
+  "model_path": "models/cnn/pressure_cnn.pt",
+  "labels": [
+    "amber",
+    "jay",
+    "666",
+    "background"
+  ],
+  "label_to_index": {
+    "amber": 0,
+    "jay": 1,
+    "666": 2,
+    "background": 3
+  },
+  "target_frames": 50,
+  "rows": 4,
+  "cols": 4,
+  "max_value": 16384.0,
+  "validation_ratio": 0.2,
+  "train_samples": 164,
+  "validation_samples": 41,
+  "train_counts": {
+    "amber": 43,
+    "jay": 40,
+    "666": 40,
+    "background": 41
+  },
+  "validation_counts": {
+    "amber": 11,
+    "jay": 10,
+    "666": 10,
+    "background": 10
+  },
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 1.176487832534604,
+      "train_accuracy": 0.5182926829268293,
+      "validation_loss": 1.152648629211798,
+      "validation_accuracy": 0.7073170731707317
+    }
+  ]
+}

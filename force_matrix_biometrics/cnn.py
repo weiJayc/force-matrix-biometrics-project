@@ -11,7 +11,8 @@ from typing import Any
 
 DEFAULT_LABELS = ("amber", "jay", "666", "background")
 DEFAULT_TARGET_FRAMES = 50
-DEFAULT_MAX_VALUE = 16384.0
+DEFAULT_MAX_VALUE = 65535.0
+DEFAULT_SPLIT_STRATEGY = "random"
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,7 @@ class DatasetBundle:
     target_frames: int
     train_counts: dict[str, int]
     validation_counts: dict[str, int]
+    split_strategy: str
 
 
 def _require_torch() -> Any:
@@ -153,9 +155,12 @@ def build_dataset_bundle(
     target_frames: int = DEFAULT_TARGET_FRAMES,
     validation_ratio: float = 0.2,
     seed: int = 42,
+    split_strategy: str = DEFAULT_SPLIT_STRATEGY,
 ) -> DatasetBundle:
     if not 0.0 <= validation_ratio < 1.0:
         raise ValueError("validation_ratio must be in [0, 1)")
+    if split_strategy not in {"random", "time"}:
+        raise ValueError("split_strategy must be 'random' or 'time'")
 
     files_by_label = find_labeled_csv_files(dataset_root, labels)
     label_to_index = {label: index for index, label in enumerate(labels)}
@@ -183,18 +188,26 @@ def build_dataset_bundle(
         rows = len(samples[0].frames[0])
         cols = len(samples[0].frames[0][0])
 
-        rng.shuffle(samples)
         validation_count = int(round(len(samples) * validation_ratio))
         if validation_ratio > 0.0 and len(samples) > 1:
             validation_count = max(1, min(validation_count, len(samples) - 1))
 
-        validation_samples.extend(samples[:validation_count])
-        train_samples.extend(samples[validation_count:])
+        if split_strategy == "random":
+            rng.shuffle(samples)
+            validation_label_samples = samples[:validation_count]
+            train_label_samples = samples[validation_count:]
+        else:
+            validation_label_samples = samples[-validation_count:] if validation_count else []
+            train_label_samples = samples[:-validation_count] if validation_count else samples
+
+        validation_samples.extend(validation_label_samples)
+        train_samples.extend(train_label_samples)
         validation_counts[label] = validation_count
         train_counts[label] = len(samples) - validation_count
 
-    rng.shuffle(train_samples)
-    rng.shuffle(validation_samples)
+    if split_strategy == "random":
+        rng.shuffle(train_samples)
+        rng.shuffle(validation_samples)
 
     return DatasetBundle(
         train_samples=train_samples,
@@ -205,6 +218,7 @@ def build_dataset_bundle(
         target_frames=target_frames,
         train_counts=train_counts,
         validation_counts=validation_counts,
+        split_strategy=split_strategy,
     )
 
 
@@ -241,6 +255,26 @@ def summarize_dataset(dataset_root: str | Path = "dataset", labels: tuple[str, .
     return {label: len(paths) for label, paths in files_by_label.items()}
 
 
+def build_confusion_matrix(
+    expected_indexes: list[int],
+    predicted_indexes: list[int],
+    class_count: int,
+) -> list[list[int]]:
+    matrix = [[0 for _ in range(class_count)] for _ in range(class_count)]
+    for expected, predicted in zip(expected_indexes, predicted_indexes):
+        matrix[expected][predicted] += 1
+    return matrix
+
+
+def print_confusion_matrix(matrix: list[list[int]], labels: tuple[str, ...]) -> None:
+    print("confusion_matrix rows=actual columns=predicted")
+    header = "actual\\pred".ljust(14) + "".join(label.rjust(12) for label in labels)
+    print(header)
+    for label, row in zip(labels, matrix):
+        values = "".join(str(value).rjust(12) for value in row)
+        print(label.ljust(14) + values)
+
+
 def train_cnn(
     dataset_root: str | Path = "dataset",
     output_dir: str | Path = "models/cnn",
@@ -250,6 +284,7 @@ def train_cnn(
     batch_size: int = 16,
     learning_rate: float = 1e-3,
     seed: int = 42,
+    split_strategy: str = DEFAULT_SPLIT_STRATEGY,
 ) -> dict[str, Any]:
     torch, _, DataLoader, Dataset = _require_torch()
     bundle = build_dataset_bundle(
@@ -257,6 +292,7 @@ def train_cnn(
         target_frames=target_frames,
         validation_ratio=validation_ratio,
         seed=seed,
+        split_strategy=split_strategy,
     )
 
     class PressureDataset(Dataset):
@@ -290,6 +326,7 @@ def train_cnn(
     print(f"train_samples={len(bundle.train_samples)} validation_samples={len(bundle.validation_samples)}")
     print(f"train_counts={bundle.train_counts}")
     print(f"validation_counts={bundle.validation_counts}")
+    print(f"split_strategy={bundle.split_strategy}")
     print(f"input_shape=(1, {bundle.target_frames}, {bundle.rows}, {bundle.cols}) device={device}")
 
     for epoch in range(1, epochs + 1):
@@ -343,6 +380,24 @@ def train_cnn(
             f"val_acc={stats['validation_accuracy']:.3f}"
         )
 
+    validation_expected: list[int] = []
+    validation_predicted: list[int] = []
+    model.eval()
+    with torch.no_grad():
+        for features, labels in validation_loader:
+            features = features.to(device)
+            logits = model(features)
+            predictions = logits.argmax(dim=1).cpu().tolist()
+            validation_predicted.extend(int(prediction) for prediction in predictions)
+            validation_expected.extend(int(label) for label in labels.tolist())
+
+    confusion_matrix = build_confusion_matrix(
+        expected_indexes=validation_expected,
+        predicted_indexes=validation_predicted,
+        class_count=len(bundle.label_to_index),
+    )
+    print_confusion_matrix(confusion_matrix, DEFAULT_LABELS)
+
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     model_path = output_path / "pressure_cnn.pt"
@@ -358,10 +413,17 @@ def train_cnn(
         "cols": bundle.cols,
         "max_value": DEFAULT_MAX_VALUE,
         "validation_ratio": validation_ratio,
+        "split_strategy": bundle.split_strategy,
         "train_samples": len(bundle.train_samples),
         "validation_samples": len(bundle.validation_samples),
         "train_counts": bundle.train_counts,
         "validation_counts": bundle.validation_counts,
+        "confusion_matrix": {
+            "labels": list(DEFAULT_LABELS),
+            "rows": "actual",
+            "columns": "predicted",
+            "matrix": confusion_matrix,
+        },
         "history": history,
     }
     metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
@@ -376,6 +438,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-dir", default="models/cnn")
     parser.add_argument("--target-frames", type=int, default=DEFAULT_TARGET_FRAMES)
     parser.add_argument("--validation-ratio", type=float, default=0.2)
+    parser.add_argument("--split-strategy", choices=("random", "time"), default=DEFAULT_SPLIT_STRATEGY)
     parser.add_argument("--epochs", type=int, default=40)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--learning-rate", type=float, default=1e-3)
@@ -400,6 +463,7 @@ def main(argv: list[str] | None = None) -> None:
         batch_size=args.batch_size,
         learning_rate=args.learning_rate,
         seed=args.seed,
+        split_strategy=args.split_strategy,
     )
 
 

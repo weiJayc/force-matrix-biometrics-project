@@ -153,3 +153,25 @@ python AI/authentication/demo_registration_auth.py
 - 實驗 reproducibility：隨機相關的 `random_state` 在部分函式有使用（如 `train_test_split`），但部分流程（例如某些腳本的 sample 選取）仍需確認是否一致。
 - I/O 路徑：`TemplateManager`、`ThresholdManager` 預設儲存在相對路徑 `templates/` 與 `thresholds/`。某些 demo/測試會將 storage_dir 指定在 `AI/authentication/templates` 等位置。
 - 支援的距離/度量：目前僅實作 Euclidean；若需其他距離（cosine、mahalanobis），需要擴充。
+
+
+
+
+## 最終修改架構是dtw_contact_gate_benchmark.py和sequence_statistics_contact_gate_benchmark.py
+ Input Sequence
+        │
+        ▼
+   Contact Gate
+        │
+   ┌────┴────┐
+   │         │
+NO-CONTACT  CONTACT
+   │         │
+  Reject     ▼
+          DTW / Sequence Statistics
+               │
+        ┌──────┴──────┐
+        │             │
+     Accept         Reject
+        │             │
+     開門成功       開門失敗

@@ -414,6 +414,7 @@ def train_cnn(
         "max_value": DEFAULT_MAX_VALUE,
         "validation_ratio": validation_ratio,
         "split_strategy": bundle.split_strategy,
+        "seed": seed,
         "train_samples": len(bundle.train_samples),
         "validation_samples": len(bundle.validation_samples),
         "train_counts": bundle.train_counts,

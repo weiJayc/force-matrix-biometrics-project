@@ -9,10 +9,10 @@ from pathlib import Path
 from typing import Any
 
 
-DEFAULT_LABELS = ("amber", "jay", "666", "background")
+DEFAULT_LABELS = ("Amber", "Jay", "666", "Andy", "Apple", "Joanna", "Reyna", "Tiffany", "background")
 DEFAULT_TARGET_FRAMES = 50
 DEFAULT_MAX_VALUE = 65535.0
-DEFAULT_SPLIT_STRATEGY = "random"
+DEFAULT_SPLIT_STRATEGY = "time"
 
 
 @dataclass(frozen=True)

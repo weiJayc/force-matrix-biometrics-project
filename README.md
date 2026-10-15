@@ -1,128 +1,82 @@
 # Matrix-Force Sensor Biometrics Project
 
-A biometrics system that captures and analyzes pressure distribution patterns using a matrix-force sensor. This project reads sensor data via serial communication and visualizes it as heatmaps for biometric analysis.
-
-## Project Status (temporary)
-
-> Temporary section, last checked 2026-10-01 on branch `feature/cnn`. Remove it once the cleanup below is done. Where it disagrees with the rest of this README, trust this section.
-
-### Active
-
-- `desktop_app.py` + `force_matrix_biometrics/` (`app.py`, `recording.py`, `serial_io.py`, `config.py`, `profiles.py`): the data-collection desktop app. It is the only capture entrypoint in use.
-- `force_matrix_biometrics/cnn.py`, `train_cnn.py`, `check_cnn_predictions.py`, `plot_training_history.py`: CNN training and evaluation, developed on this branch. See [CNN Training and Evaluation](#cnn-training-and-evaluation) for how to run them.
-- `dataset/`: current training data, recorded 2026-09-30. It has 9 labels (`666`, `Amber`, `Andy`, `Apple`, `Jay`, `Joanna`, `Reyna`, `Tiffany`, `background`), with 100 recordings per label and 50 frames per recording.
-- `models/`: output of `train_cnn.py`. All earlier models were deleted on 2026-10-01 so training can start over on the new `dataset/`.
-- `build_exe.ps1`: still the way to package the desktop app.
-
-### Active on another branch
-
-- `AI/`: the copy on this branch is the July 2026 KNN / random-forest feasibility check. Development continues on `feature/authentication` (`AI/authentication/`, contact gate, sequence-statistics benchmarks), so don't build on the copy here.
-  - `AI/prepare_dataset.py` is the earlier all-in-one version of `data_loader.py` + `preprocess.py`.
-  - `AI/model.py` is a scratch script that reads a file no longer in `dataset/`. It has already been deleted on `feature/authentication`.
-
-### No longer used
-
-- `catch.py`, `timeCatch.py`, `heatmap_serial_sample.py`: early capture scripts, replaced by `desktop_app.py`. `force_matrix_biometrics/capture.py`, `force_matrix_biometrics/visualization.py` and the `COUNT_CAPTURE_PROFILE` / `TIMED_CAPTURE_PROFILE` profiles exist only for these scripts.
-- `press_img.txt`, `pressData_20260625_*.txt`: raw packet logs from June 2026, written by those scripts.
-- `test_dataset/`: the July 2026 recordings, moved here when `dataset/` was re-recorded. No pipeline reads it by default. `jay_test`, `lin_test` and `wu_test` use the old `hex_packet` CSV format, and `background/` is an exact copy of `background_test1/`.
-
-### Outdated
-
-- `build/`, `dist/`: PyInstaller output from 2026-06-30 (`PressureMatrixCollectorTest.exe`). It predates the July app changes (fixed frame count, live preview), so rebuild it before use. `dist/dataset/class_a/` holds two stray test recordings.
-- `TODO.txt`: the June 2026 to-do list for the data collector. Every item except mmWave capture is now done in the desktop app.
-- Most of this README below this section (Overview, Hardware Requirements, Project Structure, Usage §1–2, Data Format, Configuration): it describes the old 5×7 grid with 8-bit values, `0xAB 0xAA` header and COM3, plus the legacy scripts. The current sensor is a 4×4 grid of 16-bit values with header `AA 01` on COM4 (see `force_matrix_biometrics/profiles.py`).
-- `.github/copilot-instructions.md`: has the same outdated sensor description, and its module list is missing `app.py`, `recording.py` and `cnn.py`.
-
-The legacy scripts, their logs and `dist/dataset/` are already deleted on the unmerged `file-clean-up` branch, which also rewrites this README for the current sensor.
-
-## Overview
-
-This project interfaces with a pressure/force sensor array to capture biometric data. The sensor is configured as a 5×7 matrix (35 data points) that detects pressure distribution across a surface, which can be used for fingerprint recognition, hand geometry analysis, or other pressure-based biometric applications.
+Identifies people by the way they press on a 4×4 pressure sensor. A desktop app records labeled presses from the sensor, and a CNN learns to tell the people apart. The `AI/` folder holds simpler KNN and random-forest baselines.
 
 ## Features
 
-- **Serial Communication**: Reads data from a matrix-force sensor via RS-232 serial connection
-- **Real-time Visualization**: Displays sensor data as heatmaps using matplotlib
-- **Data Logging**: Saves raw sensor packets to files for analysis and calibration
-- **Packet Processing**: Robust packet parsing with header verification (0xAB 0xAA protocol)
+- **Live heatmap**: shows the 16 sensor values in real time.
+- **Labeled recording**: records a fixed number of frames per press and saves them as a CSV under `dataset/<label>/`.
+- **Playback**: replays any saved recording on the same heatmap.
+- **CNN classifier**: trains and evaluates a 3D CNN on the recordings.
+- **Baselines**: KNN and random-forest classifiers on the same data.
+- **Standalone app**: packages the desktop app as a Windows `.exe`.
 
-## Hardware Requirements
+## Hardware
 
-- Matrix-Force Sensor Array (5×7 grid configuration)
-- Serial connection (COM3 at 115200 baud rate)
-- PC/Computer with USB-to-serial converter (if needed)
-
-## Software Requirements
-
-- Python 3.x
-- Dependencies listed in `requirements.txt`:
-   - `numpy` - Numerical operations and data reshaping
-   - `matplotlib` - Real-time heatmap visualization
-   - `pyserial` - Serial communication with the sensor
+- A 4×4 matrix-force sensor (16 pressure points).
+- A serial connection at 115200 baud, through a USB-to-serial adapter if needed. The default port is COM4, and you can pick another one in the app.
 
 ## Installation
 
-1. **Install Python dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
+Developed on Windows with Python 3.14.
 
-2. **Configure Serial Connection:**
-   - Ensure the sensor is connected to COM3
-   - Verify baud rate is 115200
-   - (Modify `PORT` variable in the scripts if using a different COM port)
+```powershell
+python -m venv venv
+.\venv\Scripts\activate
+pip install -r requirements.txt       # desktop app: numpy, matplotlib, pyserial
+pip install -r requirements-cnn.txt   # adds PyTorch for the CNN
+pip install pandas scikit-learn       # only for the AI/ baselines; not in requirements.txt yet
+```
 
 ## Project Structure
 
 ```
 .
-├── catch.py                     # Legacy entrypoint for count-based capture
-├── heatmap_serial_sample.py      # Legacy entrypoint for the heatmap viewer
-├── timeCatch.py                  # Legacy entrypoint for timed capture
-├── force_matrix_biometrics/      # Shared package for serial + visualization logic
-├── press_img.txt                 # Log file containing captured sensor packets
-├── requirements.txt              # Python dependencies
-└── README.md                     # This file
+├── desktop_app.py               # starts the data-collection app
+├── build_exe.ps1                # packages the app into a Windows .exe
+├── train_cnn.py                 # trains the CNN
+├── check_cnn_predictions.py     # re-evaluates a trained CNN
+├── plot_training_history.py     # plots a trained CNN's training curves
+├── force_matrix_biometrics/
+│   ├── app.py                   # Tkinter app: live heatmap, recording, playback
+│   ├── recording.py             # records frames, saves and loads recording CSVs
+│   ├── serial_io.py             # reads and decodes sensor packets
+│   ├── config.py                # SerialProfile: serial and packet settings
+│   ├── profiles.py              # the sensor's settings (HEATMAP_PROFILE)
+│   └── cnn.py                   # CNN data loading, model and training
+├── AI/                          # KNN and random-forest baselines
+├── dataset/                     # recordings: <label>/<timestamp>.csv
+├── models/                      # trained CNN models, one folder per experiment
+├── requirements.txt             # desktop app dependencies
+└── requirements-cnn.txt         # adds PyTorch for the CNN
 ```
 
-## Usage
+## Collecting Data
+
+Start the app from the project root:
+
+```powershell
+python desktop_app.py
+```
+
+1. Choose the sensor's port under **COM Port** and click **Connect**. Click **Refresh COM** if the port isn't listed. The heatmap starts updating once the port is open.
+2. Enter the person's name under **Class label**, for example `Amber`. Characters other than letters, digits, `_` and `-` are replaced with `_`.
+3. Set **Fixed frames** to `50`. The app defaults to 64, but every recording in `dataset/` has 50 frames, and the `AI/` scripts only accept 50.
+4. Leave **Dataset root** at the `dataset` folder in the project, or click **Browse** to save somewhere else.
+5. Click **Start Capture** and press the sensor. Once all frames are in, the app saves the recording to `<dataset root>/<label>/<timestamp>.csv`.
+
+To replay a recording, select it under **Saved recordings** and click **Preview selected**. Click **Refresh** to rescan the folder.
+
+To train the CNN on a new person, the label must exactly match a name in `DEFAULT_LABELS` (see [CNN Training and Evaluation](#cnn-training-and-evaluation)).
 
 ### Build a standalone EXE
 
-Run the PowerShell build script to generate a single-file Windows executable:
-
 ```powershell
-.uild_exe.ps1
+.\build_exe.ps1                    # creates dist\PressureMatrixCollector.exe
+.\build_exe.ps1 -Name MyCollector  # creates dist\MyCollector.exe
 ```
 
-The built executable will appear in `dist\PressureMatrixCollector.exe` by default. The script uses the Tkinter desktop launcher in `desktop_app.py`.
-
-### 1. **Real-time Heatmap Visualization**
-
-Run `heatmap_serial_sample.py` to continuously capture and display sensor data as a heatmap:
-
-```bash
-python heatmap_serial_sample.py
-```
-
-This script will:
-- Connect to the sensor on COM3 at 115200 baud
-- Read sensor packets in real-time
-- Display each 5×7 grid as a color heatmap
-- Update continuously as new data arrives
-
-### 2. **Capture and Log Sensor Data**
-
-Run `catch.py` to record sensor packets to `press_img.txt`:
-
-```bash
-python catch.py
-```
-
-This script will:
-- Read 17 sensor packets (configurable)
-- Save each packet as hexadecimal data to `press_img.txt`
-- Wait 3 seconds between captures (configurable)
+The script needs a virtual environment named `.venv` or `venv` in the project root with `requirements.txt` installed, and installs PyInstaller into it if it's missing. `build/` and `dist/` are ignored by git. The exe saves recordings to a `dataset` folder inside the folder it is started from.
 
 ## CNN Training and Evaluation
 
@@ -132,13 +86,7 @@ Three scripts train and check the CNN. Run all of them from the project root:
 - `plot_training_history.py` plots the training curves.
 - `check_cnn_predictions.py` re-checks a trained model's predictions.
 
-Install PyTorch first:
-
-```powershell
-pip install -r requirements-cnn.txt
-```
-
-`plot_training_history.py` doesn't need PyTorch, only `matplotlib` and `numpy`.
+`plot_training_history.py` only needs `matplotlib` and `numpy`. The other two also need PyTorch from `requirements-cnn.txt`.
 
 A typical run:
 
@@ -148,6 +96,8 @@ python train_cnn.py --output-dir models/cnn_time                       # train a
 python plot_training_history.py models/cnn_time                        # save the loss/accuracy and confusion-matrix plots
 python check_cnn_predictions.py --model-dir models/cnn_time --verbose  # re-check predictions one recording at a time
 ```
+
+`models/` already holds the team's trained models. Each folder is named after its settings. For example, `cnn_random_epoch400_lr3e-4` used the random split, 400 epochs and a learning rate of 3e-4.
 
 ### `train_cnn.py`
 
@@ -191,7 +141,7 @@ Reads `metadata.json` from a model folder and saves two plots into the same fold
 | `--show` | off | Also open the plots in a window after saving them. |
 
 ```powershell
-python plot_training_history.py models/cnn_random --show
+python plot_training_history.py models/cnn_random_epoch400_lr3e-4 --show
 ```
 
 ### `check_cnn_predictions.py`
@@ -200,7 +150,7 @@ Loads a trained model and rebuilds the exact train/validation split it was train
 
 | Argument | Default | Description |
 |---|---|---|
-| `--model-dir` | `models/cnn_train10` | Model folder containing `pressure_cnn.pt` and `metadata.json`. The default folder no longer exists, so always pass this argument. |
+| `--model-dir` | required | Model folder containing `pressure_cnn.pt` and `metadata.json`. |
 | `--dataset-root` | `dataset` | Dataset to rebuild the split from. Use the same data the model was trained on. |
 | `--seed` | read from `metadata.json` (`42` if missing) | Override the split seed. Only matters for models trained with `--split-strategy random`. |
 | `--verbose` | off | Print each recording's actual label, predicted label and class probabilities, marked `OK` or `BAD`. |
@@ -208,83 +158,79 @@ Loads a trained model and rebuilds the exact train/validation split it was train
 If the dataset has changed since training, the rebuilt split won't match, and the script prints a `WARNING` with both sets of counts. Expect the train accuracy to differ slightly from the recorded value, because during training it is measured with dropout on and the weights still changing.
 
 ```powershell
-python check_cnn_predictions.py --model-dir models/cnn_random --verbose
+python check_cnn_predictions.py --model-dir models/cnn_random_epoch400_lr3e-4 --verbose
 ```
+
+## AI Baselines
+
+The `AI/` scripts train KNN and random-forest classifiers on the same recordings, as a baseline for the CNN. Run them from inside `AI/`, because they read `../dataset`:
+
+```powershell
+cd AI
+python train_knn.py             # KNN: accuracy, confusion matrix and classification report
+python train_random_forest.py   # the same with a random forest
+python cross_validation_knn.py  # 5-fold cross-validation for k = 1, 3, 5, 7, 9, 11
+```
+
+- Every recording must have exactly 50 frames. Other files are skipped with a message.
+- The label comes from the CSV's `label` column, not from the folder name.
+- `prepare_dataset.py` and `model.py` are early exploration scripts, not part of the pipeline.
+
+Authentication (accepting a registered user and rejecting everyone else) is developed separately on the `feature/authentication` branch, under `AI/authentication/`.
 
 ## Data Format
 
-### Packet Structure
-- **Header**: 2 bytes (`0xAB 0xAA`)
-- **Payload**: 33 bytes (35 byte total packet size)
-- **Data Layout**: 5 rows × 7 columns of 8-bit pressure values
-- **Total Packet Size**: 35 bytes
+### Sensor packet
 
-### Sensor Grid
+Each packet is 35 bytes:
+
+| Bytes | Content |
+|---|---|
+| 0–1 | Header `AA 01` |
+| 2–33 | 16 pressure values, each an unsigned 16-bit little-endian integer |
+| 34 | Trailing byte, ignored |
+
+The heatmap's color scale runs from 0 to 16384.
+
+### Sensor grid
+
+The 16 values are numbered row by row, and saved as `value_0` to `value_15` in the CSV:
+
 ```
-[0][1][2][3][4][5][6]
-[7][8]...
-...
-[28][29][30][31][32][33][34]
+[ 0][ 1][ 2][ 3]
+[ 4][ 5][ 6][ 7]
+[ 8][ 9][10][11]
+[12][13][14][15]
 ```
 
-Each value represents pressure intensity (0-255) at that sensor point.
+### Recording CSV
+
+Each file is one recording, with one row per frame and the header `label,frame_index,value_0,...,value_15`. Files are saved as `dataset/<label>/<YYYYmmdd_HHMMSS_ffffff>.csv`.
+
+The current `dataset/` has 9 labels (`666`, `Amber`, `Andy`, `Apple`, `Jay`, `Joanna`, `Reyna`, `Tiffany`, `background`), with 100 recordings of 50 frames each. `background` holds recordings with nobody touching the sensor.
 
 ## Configuration
 
-### Serial Port Settings
-Edit the profile definitions in `force_matrix_biometrics/profiles.py` if you need to change the serial port, baud rate, timeout, or packet layout.
-
-### Sensor Grid Dimensions
-```python
-ROWS = 5                # Number of rows in sensor matrix
-COLS = 7                # Number of columns in sensor matrix
-```
-
-### Data Capture
-In `catch.py`, adjust the `packet_limit` and `delay_seconds` values passed to `capture_packets`.
-
-## Reorganized Layout
-
-The project is now organized around a shared package instead of duplicated script logic:
-
-- `force_matrix_biometrics/serial_io.py` handles packet scanning and decoding
-- `force_matrix_biometrics/capture.py` handles packet logging and timed capture
-- `force_matrix_biometrics/visualization.py` handles the heatmap display
-- `force_matrix_biometrics/profiles.py` stores the active serial layouts for each script
-
-The original root scripts remain as entrypoints so existing commands keep working.
-
-For the desktop app and packaging workflow, use:
-
-```powershell
-python desktop_app.py
-```
+The serial settings live in `HEATMAP_PROFILE` in `force_matrix_biometrics/profiles.py`: port, baud rate, read timeout, packet header and size, grid shape, value type, and the heatmap's color range. The app starts with this profile and only changes the port at runtime. For a sensor with a different packet layout, add a new `SerialProfile` to `profiles.py` and point `app.py` at it.
 
 ## Troubleshooting
 
-### No data received
-- Verify sensor is connected to correct COM port
-- Check baud rate matches sensor configuration (115200)
-- Ensure sensor is powered on
-- Verify USB-to-serial driver is installed (if using converter)
+### The heatmap doesn't update
 
-### Serial connection errors
-- List available COM ports: `python -m serial.tools.list_ports`
-- Update `PORT` variable to the correct port
-- Ensure no other application is using the COM port
+- Read the status line in the app:
+  - "Live preview waiting for COMx: …" means the port can't be opened. Check that the sensor is plugged in and powered, and that no other program, such as a serial monitor, has the port open.
+  - "Live preview data error: …" means packets arrive but don't match the layout set in `profiles.py`.
+- Make sure the right port is selected: click **Refresh COM**, pick the port, then click **Connect**. To list ports from the command line, run `python -m serial.tools.list_ports`.
+- If you use a USB-to-serial adapter, check that its driver is installed.
 
-### Heatmap not displaying
-- Ensure `matplotlib` is installed correctly
-- Try running in an IDE with display support
-- Check for any serial read errors in console output
+### Start Capture never finishes
+
+The app waits until it has received every frame, with no timeout. If the sensor stops sending, the capture never ends. Close the app, fix the connection, and check that the live heatmap is updating before you start again.
 
 ## Future Enhancements
 
 - Add biometric feature extraction (fingerprint minutiae, pressure patterns)
-- Implement machine learning classification for biometric matching
-- Add GUI for real-time monitoring and configuration
 - Support multiple sensors or sensor arrays
-- Add data preprocessing and normalization
 - Implement touch/pressure event detection
 
 ## License

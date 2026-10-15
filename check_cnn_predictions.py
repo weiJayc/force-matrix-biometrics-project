@@ -2,8 +2,8 @@
 result with the accuracy/loss recorded in metadata.json during training.
 
 Usage:
-    python check_cnn_predictions.py --model-dir models/cnn_train10
-    python check_cnn_predictions.py --model-dir models/cnn_train10 --verbose
+    python check_cnn_predictions.py --model-dir models/cnn_random_epoch400_lr3e-4
+    python check_cnn_predictions.py --model-dir models/cnn_random_epoch400_lr3e-4 --verbose
 """
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ def evaluate(torch, model, samples, label_to_index, labels, device, verbose, tit
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model-dir", default="models/cnn_train10")
+    parser.add_argument("--model-dir", required=True, help="Model folder containing pressure_cnn.pt and metadata.json.")
     parser.add_argument("--dataset-root", default="dataset")
     parser.add_argument("--seed", type=int, default=None, help="Override the seed (default: read from metadata, else 42).")
     parser.add_argument("--verbose", action="store_true", help="Print every sample's prediction.")

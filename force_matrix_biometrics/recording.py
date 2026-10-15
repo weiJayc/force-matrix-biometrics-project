@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import csv
 import re
-import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -236,17 +235,3 @@ def capture_and_save_recording(
         rows=rows,
         cols=cols,
     )
-
-def save_recording_raw_hex(
-    packets: list[bytes],
-    csv_path: str | Path,
-) -> Path:
-    output_path = Path(csv_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    with output_path.open("w", encoding="utf-8") as f:
-        for packet in packets:
-            hex_line = " ".join(f"{b:02x}" for b in packet)
-            f.write(hex_line + "\n")
-
-    return output_path

@@ -46,7 +46,3 @@ def packet_to_grid(packet: bytes, profile: SerialProfile) -> np.ndarray:
         raise ValueError(f"Expected {expected_size} values, got {values.size}")
 
     return values.reshape(profile.rows, profile.cols)
-
-
-def packet_hex(packet: bytes) -> str:
-    return packet.hex(" ")

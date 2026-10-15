@@ -15,7 +15,3 @@ class SerialProfile:
     value_dtype: str = "<u1"
     vmin: int = 0
     vmax: int = 255
-
-    @property
-    def payload_size(self) -> int:
-        return self.packet_size - len(self.header) - 1

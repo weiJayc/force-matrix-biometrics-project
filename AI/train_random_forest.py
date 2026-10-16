@@ -1,14 +1,19 @@
 from pathlib import Path
+import sys
 
 import numpy as np
 
 from sklearn.ensemble import RandomForestClassifier
 
+AI_ROOT = Path(__file__).resolve().parent
+if str(AI_ROOT) not in sys.path:
+    sys.path.insert(0, str(AI_ROOT))
+
 from data_loader import load_dataset
-from preprocess import preprocess_dataset
+from preprocess import flatten_samples, preprocess_dataset
 
 
-DATA_DIR = Path("../dataset")
+DATA_DIR = Path(__file__).resolve().parents[1] / "dataset"
 
 
 # ==========================
@@ -43,22 +48,14 @@ X, raw_y = load_dataset(DATA_DIR)
 # (sample, frame, sensor)
 # (164,50,16)
 
-X_train_flat = X_train.reshape(
-    X_train.shape[0],
-    -1
-)
-
-X_test_flat = X_test.reshape(
-    X_test.shape[0],
-    -1
-)
+X_train_flat = flatten_samples(X_train)
+X_test_flat = flatten_samples(X_test)
 
 
 print("\n========== Flatten ==========")
 
 print("X_train:", X_train_flat.shape)
 print("X_test :", X_test_flat.shape)
-
 
 
 # ==========================
@@ -76,7 +73,6 @@ model.fit(
 )
 
 
-
 # ==========================
 # 5. Prediction
 # ==========================
@@ -86,22 +82,9 @@ y_pred = model.predict(
 )
 
 
-
 # ==========================
 # 6. Evaluation
 # ==========================
-
-'''accuracy = np.mean(
-    y_pred == y_test
-)
-
-
-print("\n========== Result ==========")
-
-print(
-    f"Accuracy: {accuracy:.4f}"
-)'''
-
 
 from sklearn.metrics import (
     confusion_matrix,
@@ -128,7 +111,6 @@ cm = confusion_matrix(
 print(cm)
 
 
-
 print("\n========== Classification Report ==========")
 
 print(
@@ -138,8 +120,6 @@ print(
         target_names=encoder.classes_
     )
 )
-
-from sklearn.metrics import confusion_matrix
 
 cm = confusion_matrix(
     y_test,

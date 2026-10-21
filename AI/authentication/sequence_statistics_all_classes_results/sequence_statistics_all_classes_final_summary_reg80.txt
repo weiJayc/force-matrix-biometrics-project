@@ -1,0 +1,51 @@
+Registration count: 80
+Repeat count: 20
+Class order (rows=true, columns=predicted): ['Amber', 'Jay', '666', 'Andy', 'Apple', 'Joanna', 'Reyna', 'Tiffany', 'background']
+
+Repeat metric mean and standard deviation:
+  overall_accuracy: mean=0.80333333, std=0.02103788
+  background_accuracy: mean=0.97750000, std=0.03699662
+  background_false_user_rate: mean=0.02250000, std=0.03699662
+
+Aggregate confusion-matrix metrics:
+  overall_accuracy: 0.8033333333333333
+  background_accuracy: 0.9775
+  background_false_user_rate: 0.0225
+  macro_precision: 0.85420403
+  macro_recall: 0.80333333
+  macro_f1: 0.80524200
+
+Per-class metrics from aggregate confusion matrix:
+  Amber: {'precision': 0.9325842696629213, 'recall': 0.415, 'f1_score': 0.57439446366782, 'test_samples': 400, 'correct_samples': 166}
+  Jay: {'precision': 0.8607594936708861, 'recall': 0.85, 'f1_score': 0.8553459119496856, 'test_samples': 400, 'correct_samples': 340}
+  666: {'precision': 0.8294797687861272, 'recall': 0.7175, 'f1_score': 0.769436997319035, 'test_samples': 400, 'correct_samples': 287}
+  Andy: {'precision': 0.7886363636363637, 'recall': 0.8675, 'f1_score': 0.8261904761904761, 'test_samples': 400, 'correct_samples': 347}
+  Apple: {'precision': 0.4893350062735257, 'recall': 0.975, 'f1_score': 0.6516290726817043, 'test_samples': 400, 'correct_samples': 390}
+  Joanna: {'precision': 0.8422330097087378, 'recall': 0.8675, 'f1_score': 0.8546798029556651, 'test_samples': 400, 'correct_samples': 347}
+  Reyna: {'precision': 0.9830028328611898, 'recall': 0.8675, 'f1_score': 0.9216467463479415, 'test_samples': 400, 'correct_samples': 347}
+  Tiffany: {'precision': 0.9618055555555556, 'recall': 0.6925, 'f1_score': 0.8052325581395349, 'test_samples': 400, 'correct_samples': 277}
+  background: {'precision': 1.0, 'recall': 0.9775, 'f1_score': 0.988621997471555, 'test_samples': 400, 'correct_samples': 391}
+
+Aggregate confusion matrix:
+true\pred,Amber,Jay,666,Andy,Apple,Joanna,Reyna,Tiffany,background
+Amber,166,3,23,1,207,0,0,0,0
+Jay,0,340,0,13,26,16,0,5,0
+666,5,5,287,49,54,0,0,0,0
+Andy,0,3,23,347,13,11,0,3,0
+Apple,0,0,2,8,390,0,0,0,0
+Joanna,0,0,4,11,37,347,0,1,0
+Reyna,7,0,0,0,44,0,347,2,0
+Tiffany,0,41,3,10,26,37,6,277,0
+background,0,3,4,1,0,1,0,0,391
+
+Row-normalized confusion matrix:
+true\pred,Amber,Jay,666,Andy,Apple,Joanna,Reyna,Tiffany,background
+Amber,0.41500000,0.00750000,0.05750000,0.00250000,0.51750000,0.00000000,0.00000000,0.00000000,0.00000000
+Jay,0.00000000,0.85000000,0.00000000,0.03250000,0.06500000,0.04000000,0.00000000,0.01250000,0.00000000
+666,0.01250000,0.01250000,0.71750000,0.12250000,0.13500000,0.00000000,0.00000000,0.00000000,0.00000000
+Andy,0.00000000,0.00750000,0.05750000,0.86750000,0.03250000,0.02750000,0.00000000,0.00750000,0.00000000
+Apple,0.00000000,0.00000000,0.00500000,0.02000000,0.97500000,0.00000000,0.00000000,0.00000000,0.00000000
+Joanna,0.00000000,0.00000000,0.01000000,0.02750000,0.09250000,0.86750000,0.00000000,0.00250000,0.00000000
+Reyna,0.01750000,0.00000000,0.00000000,0.00000000,0.11000000,0.00000000,0.86750000,0.00500000,0.00000000
+Tiffany,0.00000000,0.10250000,0.00750000,0.02500000,0.06500000,0.09250000,0.01500000,0.69250000,0.00000000
+background,0.00000000,0.00750000,0.01000000,0.00250000,0.00000000,0.00250000,0.00000000,0.00000000,0.97750000

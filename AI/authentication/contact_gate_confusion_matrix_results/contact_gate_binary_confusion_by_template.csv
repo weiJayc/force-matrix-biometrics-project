@@ -1,0 +1,9 @@
+template_user,true_positive,false_negative,false_positive,true_negative,test_samples
+Amber,371,29,281,2919,3600
+Jay,363,37,681,2519,3600
+666,383,17,549,2651,3600
+Andy,353,47,1334,1866,3600
+Apple,378,22,832,2368,3600
+Joanna,371,29,688,2512,3600
+Reyna,357,43,248,2952,3600
+Tiffany,363,37,259,2941,3600

@@ -1,0 +1,21 @@
+Original Contact Gate + Sequence Statistics report
+Registration count: 80
+Repeat count: 20
+Class order: ['Amber', 'Jay', '666', 'Andy', 'Apple', 'Joanna', 'Reyna', 'Tiffany', 'background']
+Outcome order: ['Amber', 'Jay', '666', 'Andy', 'Apple', 'Joanna', 'Reyna', 'Tiffany', 'background', 'rejected', 'multiple_accept']
+Rows are true classes; columns are final diagnostic outcomes.
+
+This is not a replacement multiclass classifier. The original algorithm evaluates each user template independently.
+
+Aggregate matrix total: 3600
+Rejected total: 546
+Multiple-accept total: 2183
+
+Amber: GAR mean=0.92750000, FRR mean=0.07250000, FAR mean=0.10035714, Threshold mean=2.38473056
+Jay: GAR mean=0.90750000, FRR mean=0.09250000, FAR mean=0.24321429, Threshold mean=2.44731166
+666: GAR mean=0.95750000, FRR mean=0.04250000, FAR mean=0.19607143, Threshold mean=2.52504863
+Andy: GAR mean=0.88250000, FRR mean=0.11750000, FAR mean=0.47642857, Threshold mean=2.50714460
+Apple: GAR mean=0.94500000, FRR mean=0.05500000, FAR mean=0.29714286, Threshold mean=2.29852899
+Joanna: GAR mean=0.92750000, FRR mean=0.07250000, FAR mean=0.24571429, Threshold mean=2.54606925
+Reyna: GAR mean=0.89250000, FRR mean=0.10750000, FAR mean=0.08857143, Threshold mean=2.55809765
+Tiffany: GAR mean=0.90750000, FRR mean=0.09250000, FAR mean=0.09250000, Threshold mean=2.37942548

@@ -1,0 +1,19 @@
+sequence_statistics_contact_gate_benchmark.py
+-最初始特徵個人模板辨識
+
+sequence_statistics_contact_gate_benchmark_live.py
+-依最初始檔案為底改為能輸出結果為json檔案給plot_live_benchmark.py繪圖
+
+
+sequence_statistics_all_classes_benchmark_live.py
+-直接對使用者和background分類
+-訓練資料80筆，重複20次增加可靠度
+-選擇與資料特徵距離最近者
+-輸出在sequence_statistics_all_classes_results資料夾
+
+sequence_statistics_contact_gate_benchmark_confusion_matrix.py
+-依最初始方法畫出結果圖
+-輸入資料在哪個使用者模板能被接受
+-若有多個個人模板同時接受，結果記為 multiple_accept
+-沒有任何個人模板接受，結果記為 rejected
+-結果輸出在contact_gate_confusion_matrix_results資料夾

@@ -1,0 +1,24 @@
+Contact Gate original method vs nine-class direct classification
+The Contact Gate method does not define a unique multiclass prediction.
+Exactly one accepted template is shown as that identity; zero is rejected; more than one is multiple_accept.
+
+Class order: ['Amber', 'Jay', '666', 'Andy', 'Apple', 'Joanna', 'Reyna', 'Tiffany', 'background']
+Original outcome columns: ['Amber', 'Jay', '666', 'Andy', 'Apple', 'Joanna', 'Reyna', 'Tiffany', 'background', 'rejected', 'multiple_accept']
+
+Repeat/test split comparison with the current direct benchmark:
+  Amber: same
+  Jay: same
+  666: same
+  Andy: same
+  Apple: same
+  Joanna: same
+  Reyna: same
+  Tiffany: same
+  background: different
+
+The formal user test samples match. The background test samples differ because the original method reserves 20 background calibration samples, while the direct benchmark uses 80 background registration samples.
+
+Original aggregate outcome total: 3600
+Direct aggregate nine-class total: 3600
+
+Do not compare the original outcome accuracy directly with direct classification accuracy without accounting for rejected/multiple_accept outcomes and the background split difference.

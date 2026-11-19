@@ -92,8 +92,7 @@ A typical run:
 
 ```powershell
 python train_cnn.py --summary                                          # check that every label has recordings
-python train_cnn.py --output-dir models/cnn_time                       # train and save the model
-python plot_training_history.py models/cnn_time                        # save the loss/accuracy and confusion-matrix plots
+python train_cnn.py --output-dir models/cnn_time                       # train, save the model and its plots
 python check_cnn_predictions.py --model-dir models/cnn_time --verbose  # re-check predictions one recording at a time
 ```
 
@@ -101,10 +100,11 @@ python check_cnn_predictions.py --model-dir models/cnn_time --verbose  # re-chec
 
 ### `train_cnn.py`
 
-Trains the CNN on the dataset and saves two files to the output folder:
+Trains the CNN on the dataset and saves these files to the output folder:
 
 - `pressure_cnn.pt`: the model weights.
 - `metadata.json`: the labels, split settings, seed, per-epoch loss and accuracy, and the final validation confusion matrix.
+- `training_curves.png` and `confusion_matrix.png`: the same plots that `plot_training_history.py` makes, drawn automatically when training finishes.
 
 It runs on a CUDA GPU if one is available, then on Apple MPS, and otherwise on the CPU.
 
@@ -130,7 +130,7 @@ python train_cnn.py --output-dir models/cnn_e100 --epochs 100 --learning-rate 0.
 
 ### `plot_training_history.py`
 
-Reads `metadata.json` from a model folder and saves two plots into the same folder:
+Reads `metadata.json` from a model folder and saves two plots into the same folder. `train_cnn.py` already does this at the end of every run, so use this script to redraw the plots for an existing model:
 
 - `training_curves.png`: loss and accuracy per epoch, train vs. validation.
 - `confusion_matrix.png`: validation results after the last epoch.

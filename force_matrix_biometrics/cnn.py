@@ -455,7 +455,7 @@ def main(argv: list[str] | None = None) -> None:
         print(json.dumps(counts, indent=2))
         return
 
-    train_cnn(
+    metadata = train_cnn(
         dataset_root=args.dataset_root,
         output_dir=args.output_dir,
         target_frames=args.target_frames,
@@ -466,6 +466,10 @@ def main(argv: list[str] | None = None) -> None:
         seed=args.seed,
         split_strategy=args.split_strategy,
     )
+
+    from .training_plots import save_training_plots
+
+    save_training_plots(metadata, args.output_dir)
 
 
 if __name__ == "__main__":

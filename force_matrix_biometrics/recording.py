@@ -5,6 +5,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from time import monotonic
 from typing import Callable
 
 import numpy as np
@@ -68,6 +69,8 @@ def capture_frames_by_count(
     target_frame_count: int,
     frame_callback: FrameCallback | None = None,
     progress_callback: ProgressCallback | None = None,
+    *,
+    timeout_seconds: float | None = None,
 ) -> list[np.ndarray]:
 
     if target_frame_count <= 0:
@@ -75,11 +78,14 @@ def capture_frames_by_count(
 
     ser = open_serial(profile)
     frames: list[np.ndarray] = []
+    deadline = monotonic() + timeout_seconds if timeout_seconds is not None else None
 
     try:
         while len(frames) < target_frame_count:
+            if deadline is not None and monotonic() >= deadline:
+                raise TimeoutError(f"Received {len(frames)} of {target_frame_count} sensor frames. Check the sensor connection.")
 
-            packet = read_one_packet(ser, profile)
+            packet = read_one_packet(ser, profile, deadline=deadline)
 
             if packet is None:
                 continue

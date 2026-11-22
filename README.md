@@ -8,6 +8,7 @@ Identifies people by the way they press on a 4×4 pressure sensor. A desktop app
 - **Labeled recording**: records a fixed number of frames per press and saves them as a CSV under `dataset/<label>/`.
 - **Playback**: replays any saved recording on the same heatmap.
 - **CNN classifier**: trains and evaluates a 3D CNN on the recordings.
+- **Live CNN verification**: checks a claimed identity after one sensor capture.
 - **Baselines**: KNN and random-forest classifiers on the same data.
 - **Standalone app**: packages the desktop app as a Windows `.exe`.
 
@@ -71,19 +72,11 @@ To replay a recording, select it under **Saved recordings** and click **Preview 
 
 To train the CNN on a new person, the label must exactly match a name in `DEFAULT_LABELS` (see [CNN Training and Evaluation](#cnn-training-and-evaluation)).
 
-### View recording curves
+### Live CNN verification
 
-`curve_viewer.py` plots the pressure curves of saved recordings, for checking or comparing data without the sensor:
+Run `python desktop_app.py` from the source checkout with `requirements-cnn.txt` installed. Select the sensor port and wait for the CNN to load. In **CNN 即時驗證**, choose the claimed identity and click **開始驗證** while pressing the sensor. The app captures the model's required 50 frames and shows **通過** (pass), **未通過** (fail), or **請重測** (retry). Use **Start Capture** to save a labeled training CSV.
 
-```powershell
-python curve_viewer.py                                   # browse dataset/
-python curve_viewer.py --dataset-root D:\path\to\dataset  # browse another folder
-```
-
-- The left panel lists recordings grouped by folder. The filter box matches folder or file names, for example `Jay` or `20261029`.
-- Selecting a recording plots it immediately. Ctrl+click or Shift+click selects several to compare. **Pin selected** keeps recordings on the plot while you browse others.
-- Options: overlay the curves or draw one plot each; plot the total of all 16 cells or each cell; subtract the baseline (mean of the first 5 frames); color by label; share the Y axis.
-- Values are shown as raw / 256.
+The default checkpoint is `models/cnn2000_time_epoch250_lr2e-4`. A claim passes when the claimed identity is the CNN's top prediction and its softmax score reaches 0.50. The threshold was selected on the first half of each class's held-out recordings. The remaining recordings test known identities and background. Performance on new people and live sessions still needs to be measured.
 
 ### Build a standalone EXE
 

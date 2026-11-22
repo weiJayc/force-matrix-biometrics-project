@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from time import monotonic
+
 import numpy as np
 import serial
 
@@ -10,9 +12,9 @@ def open_serial(profile: SerialProfile) -> serial.Serial:
     return serial.Serial(profile.port, profile.baudrate, timeout=profile.timeout)
 
 
-def read_one_packet(ser: serial.Serial, profile: SerialProfile) -> bytes | None:
+def read_one_packet(ser: serial.Serial, profile: SerialProfile, *, deadline: float | None = None) -> bytes | None:
     """Read one complete packet and return the raw bytes, including header."""
-    while True:
+    while deadline is None or monotonic() < deadline:
         first = ser.read(1)
         if not first:
             return None
@@ -32,6 +34,8 @@ def read_one_packet(ser: serial.Serial, profile: SerialProfile) -> bytes | None:
             return None
 
         return profile.header + remaining
+
+    return None
 
 
 def packet_to_grid(packet: bytes, profile: SerialProfile) -> np.ndarray:

@@ -6,7 +6,7 @@ import tkinter as tk
 import serial
 import serial.tools.list_ports
 from pathlib import Path
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from tkinter import filedialog, messagebox, ttk
 
 import numpy as np
@@ -15,10 +15,17 @@ from matplotlib.figure import Figure
 from matplotlib.image import AxesImage
 from matplotlib.text import Text
 
-from .profiles import HEATMAP_PROFILE
-from .recording import capture_and_save_recording, discover_recording_csv_files, load_recording_csv
 from .config import SerialProfile
+from .profiles import HEATMAP_PROFILE
+from .recording import (
+    RecordingResult,
+    capture_and_save_recording,
+    capture_frames_by_count,
+    discover_recording_csv_files,
+    load_recording_csv,
+)
 from .serial_io import open_serial, packet_to_grid, read_one_packet
+from .verification import CNNVerifier, VerificationResult
 
 class PressureMatrixApp(tk.Tk):
     def __init__(self) -> None:
@@ -44,8 +51,12 @@ class PressureMatrixApp(tk.Tk):
         self.progress_var = tk.DoubleVar(value=0.0)
         self.frame_count_status_var = tk.StringVar(value="0 frames captured")
         self.preview_status_var = tk.StringVar(value="No saved recording selected.")
+        self.identity_var = tk.StringVar()
+        self.verification_status_var = tk.StringVar(value="正在載入 CNN 模型…")
 
-        self._capture_thread: threading.Thread | None = None
+        self._verifier: CNNVerifier | None = None
+        self._capture_in_progress = False
+        self._closing = False
         self._heatmap_image: AxesImage | None = None
         self._heatmap_texts: list[list[Text]] = []
         self._preview_files: list[Path] = []
@@ -62,9 +73,7 @@ class PressureMatrixApp(tk.Tk):
         self._refresh_com_ports()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self.after(0, self._start_live_preview)
-
-
-    
+        self.after(0, self._load_verifier)
 
     def _build_layout(self) -> None:
         self.columnconfigure(0, weight=1)
@@ -102,14 +111,30 @@ class PressureMatrixApp(tk.Tk):
         progress_frame = ttk.Frame(self, padding=(16, 0, 16, 16))
         progress_frame.grid(row=1, column=0, sticky="nsew")
         progress_frame.columnconfigure(0, weight=1)
-        progress_frame.rowconfigure(3, weight=1)
+        progress_frame.rowconfigure(4, weight=1)
 
         ttk.Label(progress_frame, textvariable=self.status_var, wraplength=420).grid(row=0, column=0, sticky="w")
         ttk.Progressbar(progress_frame, variable=self.progress_var, maximum=1.0).grid(row=1, column=0, sticky="ew", pady=(10, 8))
         ttk.Label(progress_frame, textvariable=self.frame_count_status_var).grid(row=2, column=0, sticky="nw")
 
+        verify_frame = ttk.LabelFrame(progress_frame, text="CNN 即時驗證", padding=12)
+        verify_frame.grid(row=3, column=0, sticky="ew", pady=(12, 0))
+        verify_frame.columnconfigure(1, weight=1)
+
+        ttk.Label(verify_frame, text="待驗證身分").grid(row=0, column=0, sticky="w")
+        self.identity_box = ttk.Combobox(verify_frame, textvariable=self.identity_var, state="disabled", width=12)
+        self.identity_box.grid(row=0, column=1, sticky="ew", padx=8)
+        self.identity_box.bind("<<ComboboxSelected>>", self._on_identity_selected)
+        self.verify_button = ttk.Button(
+            verify_frame, text="開始驗證", state="disabled", command=lambda: self._start_capture(verify=True),
+        )
+        self.verify_button.grid(row=0, column=2, sticky="e")
+        ttk.Label(verify_frame, textvariable=self.verification_status_var, wraplength=380).grid(
+            row=1, column=0, columnspan=3, sticky="w", pady=(8, 0),
+        )
+
         browser_frame = ttk.LabelFrame(progress_frame, text="Saved recordings", padding=12)
-        browser_frame.grid(row=3, column=0, sticky="nsew", pady=(12, 0))
+        browser_frame.grid(row=4, column=0, sticky="nsew", pady=(12, 0))
         browser_frame.columnconfigure(0, weight=1)
         browser_frame.rowconfigure(1, weight=1)
 
@@ -198,6 +223,8 @@ class PressureMatrixApp(tk.Tk):
             self._current_preview_index = selection[0]
 
     def preview_selected_recording(self) -> None:
+        if self._capture_in_progress:
+            return
         if not self._preview_files:
             messagebox.showinfo("Preview", "No saved recordings are available yet.")
             return
@@ -222,6 +249,8 @@ class PressureMatrixApp(tk.Tk):
             return
 
         def begin_playback() -> None:
+            if self._capture_in_progress:
+                return
             self._stop_preview_playback()
             self._preview_playback_frames = list(frames)
             self._preview_playback_index = 0
@@ -284,64 +313,105 @@ class PressureMatrixApp(tk.Tk):
                 self._heatmap_texts[row_index][col_index].set_text(str(int(value)))
         self._canvas.draw_idle()
 
-    def _start_capture(self) -> None:
-        if self._capture_thread and self._capture_thread.is_alive():
+    def _post_to_ui(self, callback: Callable[[], None]) -> None:
+        if self._closing:
             return
-
-        self._stop_preview_playback()
-
         try:
-            target_frame_count = int(self.frame_count_var.get())
-        except ValueError:
-            messagebox.showerror("Invalid input", "Fixed frames must be numeric values.")
+            self.after(0, callback)
+        except (RuntimeError, tk.TclError):
+            if not self._closing:
+                raise
+
+    def _load_verifier(self) -> None:
+        def worker() -> None:
+            try:
+                verifier = CNNVerifier()
+            except Exception as exc:
+                self._post_to_ui(lambda exc=exc: self.verification_status_var.set(f"CNN 載入失敗 · {exc}"))
+                return
+            self._post_to_ui(lambda: self._verifier_ready(verifier))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _verifier_ready(self, verifier: CNNVerifier) -> None:
+        self._verifier = verifier
+        self.identity_box.configure(values=verifier.identities)
+        self.verification_status_var.set("模型已載入，請選擇待驗證身分。")
+        self._update_capture_controls()
+
+    def _on_identity_selected(self, _event) -> None:
+        self.verification_status_var.set("請在開始驗證時按壓感測器。")
+        self._update_capture_controls()
+
+    def _start_capture(self, *, verify: bool = False) -> None:
+        if self._capture_in_progress:
             return
 
-        label = self.label_var.get().strip()
-        if not label:
-            messagebox.showerror("Missing label", "Please enter a class label before starting capture.")
-            return
+        verifier = self._verifier if verify else None
+        if verify:
+            label = self.identity_var.get()
+            if verifier is None or label not in verifier.identities:
+                return
+            target_frame_count = verifier.target_frames
+            self.verification_status_var.set("準備收集…")
+        else:
+            try:
+                target_frame_count = int(self.frame_count_var.get())
+                if target_frame_count <= 0:
+                    raise ValueError
+            except ValueError:
+                messagebox.showerror("Invalid input", "Fixed frames must be a positive integer.")
+                return
+
+            label = self.label_var.get().strip()
+            if not label:
+                messagebox.showerror("Missing label", "Please enter a class label before starting capture.")
+                return
 
         dataset_root = Path(self.dataset_root_var.get()).expanduser()
-        self._set_capture_ui_enabled(False)
+        profile = self.runtime_profile
+        self._stop_preview_playback()
+        self._capture_in_progress = True
+        self._update_capture_controls()
         self.progress_var.set(0.0)
         self.status_var.set("Preparing capture...")
         self.frame_count_status_var.set("0 frames captured")
 
         def frame_callback(frame, frame_count: int) -> None:
-            self.after(0, lambda frame=frame, frame_count=frame_count: self._update_heatmap(frame, frame_count))
+            self._post_to_ui(lambda: self._update_heatmap(frame, frame_count))
 
-        def progress_callback(progress: float,  frame_count: int) -> None:
-            self.after(
-                0,
-                lambda progress=progress,  frame_count=frame_count: self._update_progress(
-                    progress,
-                    #elapsed_seconds,
-                    frame_count,
-                ),
-            )
+        def progress_callback(progress: float, frame_count: int) -> None:
+            self._post_to_ui(lambda: self._update_progress(progress, frame_count))
 
         def launch_capture() -> None:
             self.status_var.set("Capturing live sensor data...")
+            if verifier is not None:
+                self.verification_status_var.set("收集中…")
 
             def worker() -> None:
                 try:
-                    result = capture_and_save_recording(
-                        profile=self.runtime_profile,
-                        dataset_root=dataset_root,
-                        label=label,
-                        target_frame_count=target_frame_count,
-                        frame_callback=frame_callback,
-                        progress_callback=progress_callback,
+                    if verifier is None:
+                        recording = capture_and_save_recording(
+                            profile, dataset_root, label, target_frame_count, frame_callback, progress_callback,
+                        )
+                        self._post_to_ui(lambda: self._capture_succeeded(recording))
+                    else:
+                        frames = capture_frames_by_count(
+                            profile, target_frame_count, frame_callback, progress_callback, timeout_seconds=10.0,
+                        )
+                        self._post_to_ui(lambda: self.verification_status_var.set("CNN 判定中…"))
+                        result = verifier.verify(frames, label)
+                        self._post_to_ui(lambda: self._verification_finished(result))
+                except (TimeoutError, serial.SerialException) as exc:
+                    if verifier is None:
+                        self._post_to_ui(lambda exc=exc: self._capture_failed(exc))
+                    else:
+                        retry = VerificationResult("retry", str(exc))
+                        self._post_to_ui(lambda: self._verification_finished(retry, capture_complete=False))
+                except Exception as exc:
+                    self._post_to_ui(lambda exc=exc: self._capture_failed(exc, verify=verify))
 
-                    )
-                except Exception as exc:  # pragma: no cover - surfaced in the UI
-                    self.after(0, lambda exc=exc: self._capture_failed(exc))
-                    return
-
-                self.after(0, lambda result=result: self._capture_succeeded(result))
-
-            self._capture_thread = threading.Thread(target=worker, daemon=True)
-            self._capture_thread.start()
+            threading.Thread(target=worker, daemon=True).start()
 
         self._stop_live_preview(launch_capture)
 
@@ -362,8 +432,7 @@ class PressureMatrixApp(tk.Tk):
             f"Captured {frame_count} frames"
         )
 
-    def _capture_succeeded(self, result) -> None:
-        self._set_capture_ui_enabled(True)
+    def _capture_succeeded(self, result: RecordingResult) -> None:
         self.progress_var.set(1.0)
         self.status_var.set(
             f"Saved {result.normalized_frame_count} frames to {result.csv_path}"
@@ -372,18 +441,32 @@ class PressureMatrixApp(tk.Tk):
             f"{result.raw_frame_count} raw frames -> {result.normalized_frame_count} normalized frames"
         )
         self.refresh_dataset_browser()
-        self._start_live_preview()
+        self._finish_capture()
 
-    def _capture_failed(self, exc: Exception) -> None:
-        self._set_capture_ui_enabled(True)
+    def _capture_failed(self, exc: Exception, *, verify: bool = False) -> None:
         self.status_var.set("Capture failed.")
-        messagebox.showerror("Capture failed", str(exc))
+        if verify:
+            self.verification_status_var.set(f"驗證發生錯誤 · {exc}")
+        else:
+            messagebox.showerror("Capture failed", str(exc))
+        self._finish_capture()
+
+    def _verification_finished(self, result: VerificationResult, *, capture_complete: bool = True) -> None:
+        title = {"pass": "通過", "fail": "未通過", "retry": "請重測"}[result.outcome]
+        self.verification_status_var.set(f"{title} · {result.detail}")
+        self.status_var.set("Verification complete." if capture_complete else "Sensor capture interrupted.")
+        self._finish_capture()
+
+    def _finish_capture(self) -> None:
+        self._capture_in_progress = False
+        self._update_capture_controls()
         self._start_live_preview()
 
-    def _set_capture_ui_enabled(self, enabled: bool) -> None:
-        state = "normal" if enabled else "disabled"
-        for widget in (self.start_button,):
-            widget.configure(state=state)
+    def _update_capture_controls(self) -> None:
+        self.start_button.configure(state="disabled" if self._capture_in_progress else "normal")
+        can_choose = not self._capture_in_progress and self._verifier is not None
+        self.identity_box.configure(state="readonly" if can_choose else "disabled")
+        self.verify_button.configure(state="normal" if can_choose and self.identity_var.get() else "disabled")
 
     def _refresh_com_ports(self):
         ports = [p.device for p in serial.tools.list_ports.comports()]
@@ -421,7 +504,7 @@ class PressureMatrixApp(tk.Tk):
         )
 
     def _start_live_preview(self) -> None:
-        if self._live_thread and self._live_thread.is_alive():
+        if self._capture_in_progress or (self._live_thread and self._live_thread.is_alive()):
             return
 
         self._live_stop_event.clear()
@@ -541,6 +624,7 @@ class PressureMatrixApp(tk.Tk):
             self._live_thread = None
 
     def _on_close(self) -> None:
+        self._closing = True
         self._stop_preview_playback()
         self._stop_live_preview()
         self.destroy()

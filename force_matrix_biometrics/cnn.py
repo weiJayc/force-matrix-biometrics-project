@@ -115,7 +115,7 @@ def _require_torch() -> Any:
         from torch.utils.data import DataLoader, Dataset
     except Exception as exc:  # pragma: no cover - depends on the local environment.
         raise RuntimeError(
-            "PyTorch is required for CNN training. Install it with: "
+            "PyTorch is required for CNN training and verification. Install it with: "
             "pip install -r requirements-cnn.txt"
         ) from exc
 

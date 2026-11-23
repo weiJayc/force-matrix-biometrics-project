@@ -1,0 +1,2 @@
+registration_count,registration_counts,repeat,train_samples,test_samples,overall_accuracy,correct_samples,total_samples
+dynamic,"{""666"": 240, ""Amber"": 240, ""Andy"": 240, ""Apple"": 160, ""Jay"": 200, ""Joanna"": 80, ""Reyna"": 240, ""Tiffany"": 240, ""background"": 80}",1,1720,430,0.9488372093023256,408,430

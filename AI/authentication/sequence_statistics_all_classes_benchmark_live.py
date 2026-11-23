@@ -26,8 +26,8 @@ from data_loader import load_dataset
 from sequence_statistics_contact_gate_benchmark_live import (
     CONTACT_AREA_THRESHOLD,
     NO_CONTACT_USER,
+    REGISTRATION_RATIO,
     SEQUENCE_THRESHOLD_K,
-    TEST_COUNT,
     USERS,
     build_sequence_template,
     calculate_sequence_distance,
@@ -37,8 +37,7 @@ from sequence_statistics_contact_gate_benchmark_live import (
 
 
 ALL_CLASSES = USERS + (NO_CONTACT_USER,)
-REGISTRATION_COUNTS = (80,)
-REPEATS = 20
+REPEAT = 1
 RANDOM_SEED = 42
 
 
@@ -69,7 +68,6 @@ def print_dataset_information(X: np.ndarray, labels: np.ndarray) -> None:
 
 def prepare_repeat_split(
     labels: np.ndarray,
-    registration_count: int,
     rng: np.random.Generator,
 ) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
     registration_indices_by_class = {}
@@ -79,7 +77,6 @@ def prepare_repeat_split(
         indices = np.where(labels == class_name)[0]
         registration_indices, test_indices = create_user_split(
             indices,
-            registration_count,
             rng,
         )
         registration_indices_by_class[class_name] = registration_indices
@@ -94,7 +91,6 @@ def _rate_or_none(numerator: int, denominator: int) -> float | None:
 
 def evaluate_direct_classification(
     X_features: np.ndarray,
-    registration_count: int,
     repeat: int,
     registration_indices_by_class: dict[str, np.ndarray],
     test_indices_by_class: dict[str, np.ndarray],
@@ -151,7 +147,11 @@ def evaluate_direct_classification(
     }
 
     return {
-        "registration_count": registration_count,
+        "registration_count": "dynamic",
+        "registration_counts": {
+            class_name: len(indices)
+            for class_name, indices in registration_indices_by_class.items()
+        },
         "repeat": repeat,
         "class_order": list(ALL_CLASSES),
         "overall_accuracy": _rate_or_none(correct_samples, total_samples),
@@ -175,13 +175,13 @@ def evaluate_direct_classification(
 def run_one_experiment(
     X_features: np.ndarray,
     template_class: str,
-    registration_count: int,
     repeat: int,
     registration_indices_by_class: dict[str, np.ndarray],
     test_indices_by_class: dict[str, np.ndarray],
 ) -> dict:
     registration_indices = registration_indices_by_class[template_class]
     genuine_indices = test_indices_by_class[template_class]
+    registration_count = len(registration_indices)
     sequence_template = build_sequence_template(
         X_features[registration_indices]
     )
@@ -223,7 +223,8 @@ def run_one_experiment(
             ),
         }
 
-    gar = genuine_accept_count / TEST_COUNT
+    test_count = len(genuine_indices)
+    gar = genuine_accept_count / test_count
     far = impostor_accept_count / impostor_total if impostor_total else 0.0
     genuine_distance = (
         float(np.mean(genuine_distances))
@@ -239,6 +240,10 @@ def run_one_experiment(
     return {
         "template_user": template_class,
         "registration_count": registration_count,
+        "test_count": test_count,
+        "total_count": registration_count + test_count,
+        "registration_ratio": registration_count / (registration_count + test_count),
+        "test_ratio": test_count / (registration_count + test_count),
         "repeat": repeat,
         "contact_threshold": np.nan,
         "contact_rate": 1.0,
@@ -249,9 +254,9 @@ def run_one_experiment(
         "gar": gar,
         "frr": 1.0 - gar,
         "far": far,
-        "genuine_contact_count": TEST_COUNT,
+        "genuine_contact_count": test_count,
         "genuine_accept": genuine_accept_count,
-        "genuine_reject": TEST_COUNT - genuine_accept_count,
+        "genuine_reject": test_count - genuine_accept_count,
         "genuine_distance": genuine_distance,
         "impostor_contact_count": impostor_total,
         "impostor_accept": impostor_accept_count,
@@ -275,35 +280,33 @@ def print_sequence_statistics_summary(rows: list[dict]) -> None:
         f"{'Threshold':>18}"
     )
     print("-" * 110)
-    for registration_count in REGISTRATION_COUNTS:
-        for class_name in ALL_CLASSES:
-            selected = [
-                row
-                for row in rows
-                if row["registration_count"] == registration_count
-                and row["template_user"] == class_name
-            ]
-            gar_values = np.asarray(
-                [row["standalone_gar"] for row in selected],
-                dtype=np.float64,
-            )
-            far_values = np.asarray(
-                [row["standalone_far"] for row in selected],
-                dtype=np.float64,
-            )
-            thresholds = np.asarray(
-                [row["sequence_threshold"] for row in selected],
-                dtype=np.float64,
-            )
-            print(
-                f"{registration_count:<6}{class_name:<15}"
-                f"{np.mean(gar_values) * 100:>10.2f}%"
-                f"{np.std(gar_values) * 100:>10.2f}%"
-                f"{(1.0 - np.mean(gar_values)) * 100:>10.2f}%"
-                f"{np.mean(far_values) * 100:>10.2f}%"
-                f"{np.std(far_values) * 100:>10.2f}%"
-                f"{np.mean(thresholds):>18.4f}"
-            )
+    for class_name in ALL_CLASSES:
+        selected = [
+            row for row in rows
+            if row["template_user"] == class_name
+        ]
+        registration_count = selected[0]["registration_count"]
+        gar_values = np.asarray(
+            [row["standalone_gar"] for row in selected],
+            dtype=np.float64,
+        )
+        far_values = np.asarray(
+            [row["standalone_far"] for row in selected],
+            dtype=np.float64,
+        )
+        thresholds = np.asarray(
+            [row["sequence_threshold"] for row in selected],
+            dtype=np.float64,
+        )
+        print(
+            f"{registration_count:<6}{class_name:<15}"
+            f"{np.mean(gar_values) * 100:>10.2f}%"
+            f"{np.std(gar_values) * 100:>10.2f}%"
+            f"{(1.0 - np.mean(gar_values)) * 100:>10.2f}%"
+            f"{np.mean(far_values) * 100:>10.2f}%"
+            f"{np.std(far_values) * 100:>10.2f}%"
+            f"{np.mean(thresholds):>18.4f}"
+        )
 
 
 def print_classification_summary(rows: list[dict]) -> None:
@@ -324,42 +327,40 @@ def print_classification_summary(rows: list[dict]) -> None:
             f"{(row['background_false_user_rate'] * 100 if row['background_false_user_rate'] is not None else np.nan):>23.2f}%"
         )
 
-    for registration_count in REGISTRATION_COUNTS:
-        selected = [
-            row for row in rows if row["registration_count"] == registration_count
-        ]
-        print()
-        print(f"Registration={registration_count} cross-repeat statistics")
-        for field, label in (
-            ("overall_accuracy", "Overall accuracy"),
-            ("background_accuracy", "Background accuracy"),
-            ("background_false_user_rate", "Background false user rate"),
-        ):
-            values = np.asarray(
-                [
-                    row[field]
-                    for row in selected
-                    if row[field] is not None
-                ],
-                dtype=np.float64,
-            )
-            mean = float(np.mean(values)) if len(values) else np.nan
-            std = float(np.std(values)) if len(values) else np.nan
-            print(f"  {label:<30}: mean={mean * 100:.2f}%, std={std * 100:.2f}%")
+    selected = list(rows)
+    registration_count = "dynamic"
+    print()
+    print(f"Registration={registration_count} cross-repeat statistics")
+    for field, label in (
+        ("overall_accuracy", "Overall accuracy"),
+        ("background_accuracy", "Background accuracy"),
+        ("background_false_user_rate", "Background false user rate"),
+    ):
+        values = np.asarray(
+            [
+                row[field]
+                for row in selected
+                if row[field] is not None
+            ],
+            dtype=np.float64,
+        )
+        mean = float(np.mean(values)) if len(values) else np.nan
+        std = float(np.std(values)) if len(values) else np.nan
+        print(f"  {label:<30}: mean={mean * 100:.2f}%, std={std * 100:.2f}%")
 
-        for row in selected:
-            print(f"\nRepeat {row['repeat']} confusion matrix ({row['class_order']})")
-            print("true\\pred".ljust(15) + "".join(
-                f"{class_name:>12}" for class_name in row["class_order"]
-            ))
-            for class_name, values in zip(
-                row["class_order"],
-                row["confusion_matrix"],
-            ):
-                print(
-                    f"{class_name:<15}"
-                    + "".join(f"{value:>12}" for value in values)
-                )
+    for row in selected:
+        print(f"\nRepeat {row['repeat']} confusion matrix ({row['class_order']})")
+        print("true\\pred".ljust(15) + "".join(
+            f"{class_name:>12}" for class_name in row["class_order"]
+        ))
+        for class_name, values in zip(
+            row["class_order"],
+            row["confusion_matrix"],
+        ):
+            print(
+                f"{class_name:<15}"
+                + "".join(f"{value:>12}" for value in values)
+            )
 
 
 def _classification_metrics(confusion: np.ndarray) -> dict[str, dict[str, float | int]]:
@@ -468,12 +469,11 @@ def _save_confusion_heatmap(
 def save_classification_artifacts(rows: list[dict]) -> list[dict[str, object]]:
     """Save repeat-level and aggregate classification artifacts."""
     summaries = []
-    for registration_count in REGISTRATION_COUNTS:
+    for registration_count in ("dynamic",):
         selected = sorted(
             (
                 row
                 for row in rows
-                if row["registration_count"] == registration_count
             ),
             key=lambda row: row["repeat"],
         )
@@ -511,6 +511,7 @@ def save_classification_artifacts(rows: list[dict]) -> list[dict[str, object]]:
                 file,
                 fieldnames=[
                     "registration_count",
+                    "registration_counts",
                     "repeat",
                     "overall_accuracy",
                     "background_accuracy",
@@ -522,8 +523,19 @@ def save_classification_artifacts(rows: list[dict]) -> list[dict[str, object]]:
             writer.writeheader()
             writer.writerows(
                 {
-                    field: row[field]
-                    for field in writer.fieldnames
+                    "registration_count": row["registration_count"],
+                    "registration_counts": json.dumps(
+                        row["registration_counts"],
+                        sort_keys=True,
+                    ),
+                    **{
+                        field: row[field]
+                        for field in writer.fieldnames
+                        if field not in {
+                            "registration_count",
+                            "registration_counts",
+                        }
+                    },
                 }
                 for row in selected
             )
@@ -666,9 +678,9 @@ def print_benchmark_information() -> None:
     print()
     print(f"Dataset                     : {DATA_DIR}")
     print(f"Classes                     : {ALL_CLASSES}")
-    print(f"Registration counts         : {REGISTRATION_COUNTS}")
-    print(f"Test count                  : {TEST_COUNT}")
-    print(f"Repeats                     : {REPEATS}")
+    print(f"Registration ratio          : {REGISTRATION_RATIO:.0%}")
+    print("Test count                  : dynamic remainder")
+    print(f"Repeat                      : {REPEAT}")
     print(f"Sequence threshold K        : {SEQUENCE_THRESHOLD_K}")
     print(f"Contact area feature cutoff: {CONTACT_AREA_THRESHOLD}")
 
@@ -687,63 +699,62 @@ def run_benchmark(X: np.ndarray, labels: np.ndarray) -> list[dict]:
     LIVE_RESULTS_PATH.write_text("", encoding="utf-8")
     CLASSIFICATION_RESULTS_PATH.write_text("", encoding="utf-8")
 
-    for registration_count in REGISTRATION_COUNTS:
-        print()
-        print("=" * 110)
-        print(f"REGISTRATION = {registration_count}")
-        print("=" * 110)
-        rng = np.random.default_rng(RANDOM_SEED)
+    print()
+    print("=" * 110)
+    print(f"REGISTRATION RATIO = {REGISTRATION_RATIO:.0%}")
+    print("=" * 110)
+    rng = np.random.default_rng(RANDOM_SEED)
 
-        for repeat in range(1, REPEATS + 1):
-            print(f"\nRunning Reg={registration_count}, Repeat={repeat:02d}")
-            registration_indices, test_indices = prepare_repeat_split(
-                labels,
-                registration_count,
-                rng,
+    for repeat in range(1, REPEAT + 1):
+        print(
+            f"\nRunning RegistrationRatio={REGISTRATION_RATIO:.0%}, "
+            f"Repeat={repeat:02d}"
+        )
+        registration_indices, test_indices = prepare_repeat_split(
+            labels,
+            rng,
+        )
+
+        classification_result = evaluate_direct_classification(
+            X_features=X_features,
+            repeat=repeat,
+            registration_indices_by_class=registration_indices,
+            test_indices_by_class=test_indices,
+        )
+        with CLASSIFICATION_RESULTS_PATH.open(
+            "a",
+            encoding="utf-8",
+        ) as classification_file:
+            classification_file.write(
+                json.dumps(
+                    classification_result,
+                    ensure_ascii=False,
+                    allow_nan=False,
+                )
+                + "\n"
             )
+            classification_file.flush()
 
-            classification_result = evaluate_direct_classification(
+        for template_class in ALL_CLASSES:
+            print(f"    Template={template_class}")
+            result = run_one_experiment(
                 X_features=X_features,
-                registration_count=registration_count,
+                template_class=template_class,
                 repeat=repeat,
                 registration_indices_by_class=registration_indices,
                 test_indices_by_class=test_indices,
             )
-            with CLASSIFICATION_RESULTS_PATH.open(
-                "a",
-                encoding="utf-8",
-            ) as classification_file:
-                classification_file.write(
+            all_rows.append(result)
+            with LIVE_RESULTS_PATH.open("a", encoding="utf-8") as live_file:
+                live_file.write(
                     json.dumps(
-                        classification_result,
+                        result,
                         ensure_ascii=False,
-                        allow_nan=False,
+                        allow_nan=True,
                     )
                     + "\n"
                 )
-                classification_file.flush()
-
-            for template_class in ALL_CLASSES:
-                print(f"    Template={template_class}")
-                result = run_one_experiment(
-                    X_features=X_features,
-                    template_class=template_class,
-                    registration_count=registration_count,
-                    repeat=repeat,
-                    registration_indices_by_class=registration_indices,
-                    test_indices_by_class=test_indices,
-                )
-                all_rows.append(result)
-                with LIVE_RESULTS_PATH.open("a", encoding="utf-8") as live_file:
-                    live_file.write(
-                        json.dumps(
-                            result,
-                            ensure_ascii=False,
-                            allow_nan=True,
-                        )
-                        + "\n"
-                    )
-                    live_file.flush()
+                live_file.flush()
 
     return all_rows
 

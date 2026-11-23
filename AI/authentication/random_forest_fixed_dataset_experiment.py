@@ -23,6 +23,7 @@ PLOTS_DIR = OUTPUT_DIR / "plots"
 from data_loader import load_csv
 from sequence_statistics_contact_gate_benchmark_live import (
     extract_dataset_statistics,
+    REGISTRATION_RATIO,
 )
 
 ENROLLED_USERS = (
@@ -37,6 +38,7 @@ ENROLLED_USERS = (
 UNKNOWN_USER = "Joanna"
 EXCLUDED_USER = "background"
 RANDOM_SEED = 42
+REPEAT = 1
 RF_N_ESTIMATORS = 100
 RF_CLASS_WEIGHT = None
 RF_N_JOBS = -1
@@ -288,7 +290,7 @@ def save_confusion_matrix(
     return matrix
 
 
-def main() -> None:
+def _run_once() -> None:
     print("=" * 110)
     print("FIXED DATASET RANDOM FOREST GAR/FAR/FRR/EER EXPERIMENT")
     print("=" * 110)
@@ -326,10 +328,18 @@ def main() -> None:
             for record in records
             if record["normalized_label"] == user
         ]
-        indices = np.arange(len(user_records))
+        total_count = len(user_records)
+        training_count = int(total_count * REGISTRATION_RATIO)
+        test_count = total_count - training_count
+        if training_count < 1 or test_count < 1:
+            raise ValueError(
+                f"User {user} needs at least one training and test sample; "
+                f"got {total_count}."
+            )
+        indices = np.arange(total_count)
         train_indices, test_indices = train_test_split(
             indices,
-            test_size=0.2,
+            test_size=test_count,
             random_state=RANDOM_SEED,
             shuffle=True,
         )
@@ -372,18 +382,18 @@ def main() -> None:
         ),
     }
 
-    if len(training_records) != 1560:
-        raise AssertionError(
-            f"Training count is {len(training_records)}, expected 1560"
-        )
-    if len(genuine_records) != 390:
-        raise AssertionError(
-            f"Genuine test count is {len(genuine_records)}, expected 390"
-        )
-    if len(unknown_records) != 100:
-        raise AssertionError(
-            f"Unknown test count is {len(unknown_records)}, expected 100"
-        )
+    expected_training_count = sum(
+        split["training"] for split in per_user_split.values()
+    )
+    expected_genuine_count = sum(
+        split["genuine_test"] for split in per_user_split.values()
+    )
+    if len(training_records) != expected_training_count:
+        raise AssertionError("Training count does not match per-user splits")
+    if len(genuine_records) != expected_genuine_count:
+        raise AssertionError("Genuine test count does not match per-user splits")
+    if len(unknown_records) != per_user_split[UNKNOWN_USER]["unknown_test"]:
+        raise AssertionError("Unknown test count does not match inventory")
 
     integrity_check(records)
 
@@ -798,6 +808,14 @@ def main() -> None:
                 ),
             }
         )
+        split_summary[-1]["registration_ratio"] = (
+            split_summary[-1]["training"] / len(user_records)
+            if user_records else 0.0
+        )
+        split_summary[-1]["test_ratio"] = (
+            split_summary[-1]["genuine_test"] / len(user_records)
+            if user_records else 0.0
+        )
     write_csv(
         OUTPUT_DIR / "dataset_split_summary.csv",
         [
@@ -807,6 +825,8 @@ def main() -> None:
             "genuine_test",
             "unknown_test",
             "excluded",
+            "registration_ratio",
+            "test_ratio",
         ],
         split_summary,
     )
@@ -1008,6 +1028,12 @@ def main() -> None:
     print(f"  EER={eer['eer']}")
     print(f"  EER threshold={eer_threshold:.6f}")
     print(f"\nResults: {OUTPUT_DIR}")
+
+
+def main() -> None:
+    for repeat in range(1, REPEAT + 1):
+        print(f"\nRepeat={repeat:02d}")
+        _run_once()
 
 
 if __name__ == "__main__":

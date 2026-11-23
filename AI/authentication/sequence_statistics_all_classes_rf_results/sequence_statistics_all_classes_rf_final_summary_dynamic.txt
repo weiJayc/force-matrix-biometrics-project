@@ -1,0 +1,11 @@
+Random Forest benchmark
+RF parameters: {'n_estimators': 100, 'random_state': 42, 'class_weight': None, 'n_jobs': -1}
+Repeats: 1
+repeat_accuracy_mean: 0.94883721
+repeat_accuracy_std: 0.00000000
+aggregate_accuracy: 0.94883721
+macro_precision: 0.95580318
+macro_recall: 0.95296296
+macro_f1: 0.95376752
+Per-class metrics: {'Amber': {'precision': 0.9333333333333333, 'recall': 0.9333333333333333, 'f1_score': 0.9333333333333333, 'test_samples': 60, 'correct_samples': 56}, 'Jay': {'precision': 0.8727272727272727, 'recall': 0.96, 'f1_score': 0.9142857142857144, 'test_samples': 50, 'correct_samples': 48}, '666': {'precision': 0.9047619047619048, 'recall': 0.95, 'f1_score': 0.9268292682926829, 'test_samples': 60, 'correct_samples': 57}, 'Andy': {'precision': 0.9827586206896551, 'recall': 0.95, 'f1_score': 0.9661016949152542, 'test_samples': 60, 'correct_samples': 57}, 'Apple': {'precision': 0.926829268292683, 'recall': 0.95, 'f1_score': 0.9382716049382716, 'test_samples': 40, 'correct_samples': 38}, 'Joanna': {'precision': 1.0, 'recall': 0.95, 'f1_score': 0.9743589743589743, 'test_samples': 20, 'correct_samples': 19}, 'Reyna': {'precision': 1.0, 'recall': 0.9833333333333333, 'f1_score': 0.9915966386554621, 'test_samples': 60, 'correct_samples': 59}, 'Tiffany': {'precision': 0.9818181818181818, 'recall': 0.9, 'f1_score': 0.9391304347826087, 'test_samples': 60, 'correct_samples': 54}, 'background': {'precision': 1.0, 'recall': 1.0, 'f1_score': 1.0, 'test_samples': 20, 'correct_samples': 20}}
+Aggregate confusion matrix: [[56, 1, 1, 0, 2, 0, 0, 0, 0], [1, 48, 0, 0, 0, 0, 0, 1, 0], [0, 2, 57, 1, 0, 0, 0, 0, 0], [0, 0, 2, 57, 1, 0, 0, 0, 0], [0, 0, 2, 0, 38, 0, 0, 0, 0], [0, 1, 0, 0, 0, 19, 0, 0, 0], [1, 0, 0, 0, 0, 0, 59, 0, 0], [2, 3, 1, 0, 0, 0, 0, 54, 0], [0, 0, 0, 0, 0, 0, 0, 0, 20]]

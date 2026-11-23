@@ -1,0 +1,2 @@
+registration_count,registration_counts,repeat,overall_accuracy,background_accuracy,background_false_user_rate,total_samples,correct_samples
+dynamic,"{""666"": 240, ""Amber"": 240, ""Andy"": 240, ""Apple"": 160, ""Jay"": 200, ""Joanna"": 80, ""Reyna"": 240, ""Tiffany"": 240, ""background"": 80}",1,0.8023255813953488,1.0,0.0,430,345

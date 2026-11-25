@@ -37,6 +37,7 @@ pip install -r requirements-cnn.txt   # adds PyTorch for the CNN
 ├── train_cnn.py                 # trains the CNN
 ├── check_cnn_predictions.py     # re-evaluates a trained CNN
 ├── plot_training_history.py     # plots a trained CNN's training curves
+├── compare_methods.py           # trains and compares the old and new preprocessing
 ├── force_matrix_biometrics/
 │   ├── app.py                   # Tkinter app: live heatmap, recording, playback
 │   ├── curve_viewer.py          # Tkinter app: plots the pressure curves of saved recordings
@@ -49,6 +50,7 @@ pip install -r requirements-cnn.txt   # adds PyTorch for the CNN
 ├── AI/                          # KNN and random-forest baselines; authentication/ experiments
 ├── dataset/                     # recordings: <label>/<timestamp>.csv
 ├── models/                      # trained CNN models, one folder per experiment
+├── experiments/                 # output of compare_methods.py
 ├── requirements.txt             # desktop app dependencies
 └── requirements-cnn.txt         # adds PyTorch for the CNN
 ```
@@ -96,13 +98,14 @@ The script needs a virtual environment named `.venv` or `venv` in the project ro
 
 ## CNN Training and Evaluation
 
-Three scripts train and check the CNN. Run all of them from the project root:
+Four scripts train and check the CNN. Run all of them from the project root:
 
 - `train_cnn.py` trains the model.
 - `plot_training_history.py` plots the training curves.
 - `check_cnn_predictions.py` re-checks a trained model's predictions.
+- `compare_methods.py` trains both preprocessing methods under the same conditions and compares them.
 
-`plot_training_history.py` only needs `matplotlib` and `numpy`. The other two also need PyTorch from `requirements-cnn.txt`.
+`plot_training_history.py` only needs `matplotlib` and `numpy`. The others also need PyTorch from `requirements-cnn.txt`.
 
 A typical run:
 
@@ -120,7 +123,7 @@ python check_cnn_predictions.py --model-dir models/cnn_time --verbose  # re-chec
 Trains the CNN on the dataset and saves these files to the output folder:
 
 - `pressure_cnn.pt`: the model weights.
-- `metadata.json`: the labels, split settings, seed, per-epoch loss and accuracy, and the final validation confusion matrix. For `--preprocess onset` it also holds the preprocessing settings, the fitted tail correction and counts of the special cases (see [Onset preprocessing](#onset-preprocessing)).
+- `metadata.json`: the labels, split settings, seed, epochs, learning rate, batch size, per-epoch loss and accuracy, and the final validation confusion matrix. For `--preprocess onset` it also holds the preprocessing settings, the fitted tail correction and counts of the special cases (see [Onset preprocessing](#onset-preprocessing)).
 - `training_curves.png` and `confusion_matrix.png`: the same plots that `plot_training_history.py` makes, drawn automatically when training finishes.
 
 It runs on a CUDA GPU if one is available, then on Apple MPS, and otherwise on the CPU.
@@ -132,11 +135,12 @@ It runs on a CUDA GPU if one is available, then on Apple MPS, and otherwise on t
 | `--preprocess` | `resize` | How recordings become model input. `resize`: the original pipeline, which resamples the whole recording. `onset`: subtract the baseline and cut a fixed window at the press onset; see [Onset preprocessing](#onset-preprocessing). |
 | `--target-frames` | `50` | `resize` only. Each recording is resampled to this many frames by linear interpolation. |
 | `--validation-ratio` | `0.2` | Share of each label's recordings held out for validation. Must be at least 0 and less than 1. |
-| `--split-strategy` | `time` | `time`: for each label, the most recent recordings (by the timestamp in the filename) go to validation, so the model is tested on later sessions. `random`: each label's recordings are shuffled with `--seed` before splitting. |
+| `--split-strategy` | `time` | `time`: for each label, the most recent recordings (by the timestamp in the filename) go to validation. `random`: each label's recordings are shuffled with `--seed` before splitting. `day`: every recording from `--validation-day` goes to validation and every other day to training, so the model is tested on a session it never saw. With `random` and `time`, validation shares recording sessions with training, which lets a model score well on session cues such as the sensor baseline; `day` does not. |
+| `--validation-day` | none | Required with `--split-strategy day`: the day to hold out, as `20261029` or `2026-10-29`, matched against the date at the start of each file name. `--validation-ratio` is ignored. |
 | `--epochs` | `40` | Number of training epochs. |
 | `--batch-size` | `16` | Recordings per training batch. |
 | `--learning-rate` | `0.001` | Adam learning rate. |
-| `--seed` | `42` | Seed for the `random` split and, with `--preprocess onset`, for the baseline jitter. It does not seed weight initialization or batch order, so two runs with the same settings still give slightly different results. |
+| `--seed` | `42` | Fixes the `random` split, the baseline jitter, the starting weights, dropout and the batch order, so a run can be repeated. GPU kernels can still make results differ very slightly. Models saved before this change only used it for the split. |
 | `--summary` | off | Print the number of recordings per label and exit without training. |
 
 The classes come from the `DEFAULT_LABELS` tuple in `force_matrix_biometrics/cnn.py`, not from whichever folders exist. Every label in the tuple needs a folder under `--dataset-root` with at least one CSV, otherwise the script stops with an error. To add or remove a person, edit that tuple. `background` is not in it, so neither pipeline reads `dataset/background`: whether someone is pressing is decided by the onset trigger, not by the CNN. Models trained before this change have 9 classes including `background`; `check_cnn_predictions.py` still rebuilds them with the labels saved in their `metadata.json`.
@@ -201,6 +205,41 @@ If the dataset has changed since training, the rebuilt split won't match, and th
 
 ```powershell
 python check_cnn_predictions.py --model-dir models/cnn_onset --verbose
+```
+
+### `compare_methods.py`
+
+Answers one question: does the onset preprocessing recognize people better than resize on a day the model has never seen? Both methods use the same people, settings and seeds, so the preprocessing is the only difference.
+
+- **Held-out day (main comparison).** Each recording day is held out once (`--split-strategy day`), so every recording is validated by a model that never saw its day. This is the closest to a door handle meeting a new day.
+- **Random split (supporting check).** The same runs on a random split, where validation shares sessions with training. The drop from the random split to the held-out day shows how much a method relies on session cues such as the sensor baseline. Compare each method's drop, not random-split scores across methods.
+
+Each combination runs once per seed, because a single run can move by several points. With the defaults that is 2 methods × (4 days + random split) × 3 seeds = 30 runs, about 25 minutes on a laptop GPU with 3 at a time.
+
+| Argument | Default | Description |
+|---|---|---|
+| `--output-dir` | `experiments/method_comparison` | One folder per run, plus the summary files. |
+| `--days` | every day in the dataset | Days to hold out, as `YYYYMMDD`. |
+| `--seeds` | `1 2 3` | One run per seed for every combination. |
+| `--epochs` / `--learning-rate` / `--batch-size` | `250` / `0.0002` / `16` | Used for every run. |
+| `--methods` | `resize onset` | Which preprocessing methods to train. |
+| `--parallel` | `3` | Runs trained at the same time. |
+| `--dry-run` | off | List the runs and their `train_cnn.py` commands without training. |
+| `--summarize-only` | off | Skip training and rebuild the summary from finished runs. |
+
+Finished runs are skipped, so running the script again resumes after an interruption or retries failed runs. A finished run trained with other settings stops the script instead of being mixed in; use another `--output-dir`.
+
+The output folder gets:
+
+- `<method>_day<YYYYMMDD>_seed<n>/` and `<method>_random_seed<n>/`: the usual `train_cnn.py` output for each run, plus `train.log`.
+- `results.csv`: one row per run with its accuracy after the last epoch, its mean over the last 10 epochs, and each person's accuracy.
+- `summary.md`: four tables. Per held-out day, all days pooled, the random-split-to-held-out-day drop, and per person.
+- `comparison.png`: held-out-day accuracy per day for both methods, and each method's drop.
+
+```powershell
+python compare_methods.py --dry-run          # list the 30 runs, train nothing
+python compare_methods.py                    # train missing runs, then write the summary
+python compare_methods.py --summarize-only   # rewrite the summary from finished runs
 ```
 
 ## AI Baselines

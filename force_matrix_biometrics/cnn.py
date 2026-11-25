@@ -18,6 +18,7 @@ DEFAULT_LABELS = ("Amber", "Jay", "666", "Andy", "Apple", "Joanna", "Reyna", "Ti
 DEFAULT_TARGET_FRAMES = 50
 DEFAULT_MAX_VALUE = 65535.0
 DEFAULT_SPLIT_STRATEGY = "time"
+SPLIT_CHOICES = ("random", "time", "day")
 PREPROCESS_CHOICES = ("resize", "onset")
 DEFAULT_PREPROCESS = "resize"
 # The sensor reports multiples of 256. Onset thresholds are written in raw / 256 units.
@@ -107,6 +108,7 @@ class DatasetBundle:
     onset_config: OnsetConfig | None = None
     tail_correction: Frame | None = None
     preprocess_stats: dict[str, Any] = field(default_factory=dict)
+    validation_day: str | None = None
 
 
 def _require_torch() -> Any:
@@ -138,6 +140,30 @@ def find_labeled_csv_files(dataset_root: str | Path, labels: tuple[str, ...] = D
             raise ValueError(f"No CSV files found in {label_dir}")
 
     return files_by_label
+
+
+def recording_day(path: str | Path) -> str:
+    """Recording date (YYYYMMDD) from a file named <YYYYmmdd_HHMMSS_ffffff>.csv."""
+    day = Path(path).name[:8]
+    if not day.isdigit():
+        raise ValueError(f"Cannot read a YYYYMMDD date from the file name {Path(path).name}")
+    return day
+
+
+def normalize_day(day: str | None) -> str:
+    """Accept 20261029 or 2026-10-29 and return 20261029."""
+    if not day:
+        raise ValueError("split_strategy 'day' needs a validation day, e.g. 20261029")
+    digits = day.replace("-", "")
+    if len(digits) != 8 or not digits.isdigit():
+        raise ValueError(f"Validation day must look like 20261029 or 2026-10-29, got {day!r}")
+    return digits
+
+
+def list_recording_days(dataset_root: str | Path = "dataset", labels: tuple[str, ...] = DEFAULT_LABELS) -> list[str]:
+    """Every recording date found under the given label folders, sorted."""
+    files_by_label = find_labeled_csv_files(dataset_root, labels)
+    return sorted({recording_day(path) for paths in files_by_label.values() for path in paths})
 
 
 def _value_column_sort_key(name: str) -> int:
@@ -432,6 +458,7 @@ def build_dataset_bundle(
     preprocess: str = DEFAULT_PREPROCESS,
     onset_config: OnsetConfig | None = None,
     tail_correction: Frame | None = None,
+    validation_day: str | None = None,
 ) -> DatasetBundle:
     """Load, preprocess and split the dataset.
 
@@ -439,15 +466,22 @@ def build_dataset_bundle(
     preprocess="onset": find the press onset, subtract the baseline and cut a fixed window;
         target_frames is ignored in favour of onset_config.window_frames. tail_correction is
         fitted on the training split unless given (pass the saved one to rebuild a model's data).
+    split_strategy="day": every recording from validation_day (YYYYMMDD, read from the file
+        name) is validation and every other recording is training, so the model is tested on
+        a session it never saw. validation_ratio is ignored.
     Only the folders named in labels are read. Pass a model's saved labels to rebuild its data.
     """
     if not 0.0 <= validation_ratio < 1.0:
         raise ValueError("validation_ratio must be in [0, 1)")
-    if split_strategy not in {"random", "time"}:
-        raise ValueError("split_strategy must be 'random' or 'time'")
+    if split_strategy not in SPLIT_CHOICES:
+        raise ValueError(f"split_strategy must be one of {SPLIT_CHOICES}")
     if preprocess not in PREPROCESS_CHOICES:
         raise ValueError(f"preprocess must be one of {PREPROCESS_CHOICES}")
-    config =(onset_config or DEFAULT_ONSET_CONFIG) if preprocess == "onset" else None
+    if split_strategy == "day":
+        validation_day = normalize_day(validation_day)
+    else:
+        validation_day = None
+    config = (onset_config or DEFAULT_ONSET_CONFIG) if preprocess == "onset" else None
 
     files_by_label = find_labeled_csv_files(dataset_root, labels)
     label_to_index = {label: index for index, label in enumerate(labels)}
@@ -483,22 +517,31 @@ def build_dataset_bundle(
         rows = len(samples[0].frames[0])
         cols = len(samples[0].frames[0][0])
 
-        validation_count = int(round(len(samples) * validation_ratio))
-        if validation_ratio > 0.0 and len(samples) > 1:
-            validation_count = max(1, min(validation_count, len(samples) - 1))
-
-        if split_strategy == "random":
-            rng.shuffle(samples)
-            validation_label_samples = samples[:validation_count]
-            train_label_samples = samples[validation_count:]
+        if split_strategy == "day":
+            validation_label_samples = [s for s in samples if recording_day(s.path) == validation_day]
+            train_label_samples = [s for s in samples if recording_day(s.path) != validation_day]
+            if not train_label_samples:
+                raise ValueError(f"Every '{label}' recording is from {validation_day}; nothing left to train on")
         else:
-            validation_label_samples = samples[-validation_count:] if validation_count else []
-            train_label_samples = samples[:-validation_count] if validation_count else samples
+            validation_count = int(round(len(samples) * validation_ratio))
+            if validation_ratio > 0.0 and len(samples) > 1:
+                validation_count = max(1, min(validation_count, len(samples) - 1))
+
+            if split_strategy == "random":
+                rng.shuffle(samples)
+                validation_label_samples = samples[:validation_count]
+                train_label_samples = samples[validation_count:]
+            else:
+                validation_label_samples = samples[-validation_count:] if validation_count else []
+                train_label_samples = samples[:-validation_count] if validation_count else samples
 
         validation_samples.extend(validation_label_samples)
         train_samples.extend(train_label_samples)
-        validation_counts[label] = validation_count
-        train_counts[label] = len(samples) - validation_count
+        validation_counts[label] = len(validation_label_samples)
+        train_counts[label] = len(train_label_samples)
+
+    if split_strategy == "day" and not validation_samples:
+        raise ValueError(f"No recordings from {validation_day} under {dataset_root}")
 
     if split_strategy == "random":
         rng.shuffle(train_samples)
@@ -527,6 +570,7 @@ def build_dataset_bundle(
         labels=tuple(labels),
         preprocess=preprocess,
         onset_config=config,
+        validation_day=validation_day,
         tail_correction=tail_correction if config is not None else None,
         preprocess_stats=preprocess_stats,
     )
@@ -597,8 +641,14 @@ def train_cnn(
     split_strategy: str = DEFAULT_SPLIT_STRATEGY,
     preprocess: str = DEFAULT_PREPROCESS,
     onset_config: OnsetConfig | None = None,
+    validation_day: str | None = None,
 ) -> dict[str, Any]:
     torch, _, DataLoader, Dataset = _require_torch()
+    # The seed fixes the split, the baseline jitter, the starting weights, dropout and the
+    # batch order, so a run can be repeated. GPU kernels can still differ very slightly.
+    torch.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
     bundle = build_dataset_bundle(
         dataset_root=dataset_root,
         target_frames=target_frames,
@@ -607,6 +657,7 @@ def train_cnn(
         split_strategy=split_strategy,
         preprocess=preprocess,
         onset_config=onset_config,
+        validation_day=validation_day,
     )
     baseline_jitter = bundle.onset_config.baseline_jitter if bundle.onset_config else 0.0
 
@@ -656,6 +707,8 @@ def train_cnn(
     print(f"train_counts={bundle.train_counts}")
     print(f"validation_counts={bundle.validation_counts}")
     print(f"split_strategy={bundle.split_strategy}")
+    if bundle.validation_day is not None:
+        print(f"validation_day={bundle.validation_day}")
     print(f"preprocess={bundle.preprocess}")
     if bundle.onset_config is not None:
         print(f"onset_config={asdict(bundle.onset_config)}")
@@ -747,7 +800,13 @@ def train_cnn(
         "max_value": DEFAULT_MAX_VALUE,
         "validation_ratio": validation_ratio,
         "split_strategy": bundle.split_strategy,
+        "validation_day": bundle.validation_day,
         "seed": seed,
+        # The seed also fixes weights and batch order (models saved before this key existed did not).
+        "seed_controls_weights": True,
+        "epochs": epochs,
+        "learning_rate": learning_rate,
+        "batch_size": batch_size,
         "train_samples": len(bundle.train_samples),
         "validation_samples": len(bundle.validation_samples),
         "train_counts": bundle.train_counts,
@@ -778,11 +837,19 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-dir", default="models/cnn")
     parser.add_argument("--target-frames", type=int, default=DEFAULT_TARGET_FRAMES)
     parser.add_argument("--validation-ratio", type=float, default=0.2)
-    parser.add_argument("--split-strategy", choices=("random", "time"), default=DEFAULT_SPLIT_STRATEGY)
+    parser.add_argument(
+        "--split-strategy",
+        choices=SPLIT_CHOICES,
+        default=DEFAULT_SPLIT_STRATEGY,
+        help="random: shuffle each label. time: each label's latest recordings validate. "
+        "day: every recording from --validation-day validates, all other days train.",
+    )
+    parser.add_argument("--validation-day", help="With --split-strategy day: the held-out day, e.g. 20261029.")
     parser.add_argument("--epochs", type=int, default=40)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--learning-rate", type=float, default=1e-3)
-    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--seed", type=int, default=42,
+                        help="Fixes the split, the starting weights, dropout and the batch order.")
     parser.add_argument(
         "--preprocess",
         choices=PREPROCESS_CHOICES,
@@ -820,6 +887,7 @@ def main(argv: list[str] | None = None) -> None:
         learning_rate=args.learning_rate,
         seed=args.seed,
         split_strategy=args.split_strategy,
+        validation_day=args.validation_day,
         preprocess=args.preprocess,
         onset_config=OnsetConfig(
             window_frames=args.window_frames,

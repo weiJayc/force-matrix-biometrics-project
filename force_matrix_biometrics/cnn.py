@@ -11,9 +11,10 @@ from pathlib import Path
 from typing import Any
 
 
-DEFAULT_LABELS = ("Amber", "Jay", "666", "Andy", "Apple", "Joanna", "Reyna", "Tiffany", "background")
-# The onset pipeline only classifies people: "no one touching" is decided by the trigger rule.
-PERSON_LABELS = tuple(label for label in DEFAULT_LABELS if label != "background")
+# The people the CNN classifies; only these folders under the dataset root are read.
+# dataset/background (nobody touching the sensor) is deliberately left out: whether someone
+# is pressing is decided by the onset trigger, not by the CNN.
+DEFAULT_LABELS = ("Amber", "Jay", "666", "Andy", "Apple", "Joanna", "Reyna", "Tiffany")
 DEFAULT_TARGET_FRAMES = 50
 DEFAULT_MAX_VALUE = 65535.0
 DEFAULT_SPLIT_STRATEGY = "time"
@@ -423,7 +424,7 @@ def _onset_stats(
 
 def build_dataset_bundle(
     dataset_root: str | Path = "dataset",
-    labels: tuple[str, ...] | None = None,
+    labels: tuple[str, ...] = DEFAULT_LABELS,
     target_frames: int = DEFAULT_TARGET_FRAMES,
     validation_ratio: float = 0.2,
     seed: int = 42,
@@ -438,7 +439,7 @@ def build_dataset_bundle(
     preprocess="onset": find the press onset, subtract the baseline and cut a fixed window;
         target_frames is ignored in favour of onset_config.window_frames. tail_correction is
         fitted on the training split unless given (pass the saved one to rebuild a model's data).
-    labels defaults to all labels for "resize" and to people only for "onset".
+    Only the folders named in labels are read. Pass a model's saved labels to rebuild its data.
     """
     if not 0.0 <= validation_ratio < 1.0:
         raise ValueError("validation_ratio must be in [0, 1)")
@@ -446,9 +447,7 @@ def build_dataset_bundle(
         raise ValueError("split_strategy must be 'random' or 'time'")
     if preprocess not in PREPROCESS_CHOICES:
         raise ValueError(f"preprocess must be one of {PREPROCESS_CHOICES}")
-    if labels is None:
-        labels = DEFAULT_LABELS if preprocess == "resize" else PERSON_LABELS
-    config = (onset_config or DEFAULT_ONSET_CONFIG) if preprocess == "onset" else None
+    config =(onset_config or DEFAULT_ONSET_CONFIG) if preprocess == "onset" else None
 
     files_by_label = find_labeled_csv_files(dataset_root, labels)
     label_to_index = {label: index for index, label in enumerate(labels)}
@@ -788,8 +787,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--preprocess",
         choices=PREPROCESS_CHOICES,
         default=DEFAULT_PREPROCESS,
-        help="resize: stretch each recording to --target-frames (original pipeline, all labels). "
-        "onset: subtract the pre-press baseline and cut a fixed window at the press onset (people only).",
+        help="resize: stretch each recording to --target-frames (original pipeline). "
+        "onset: subtract the pre-press baseline and cut a fixed window at the press onset.",
     )
     onset = parser.add_argument_group("onset pipeline (only used with --preprocess onset)")
     onset.add_argument("--window-frames", type=int, default=DEFAULT_ONSET_CONFIG.window_frames,

@@ -139,7 +139,7 @@ It runs on a CUDA GPU if one is available, then on Apple MPS, and otherwise on t
 | `--seed` | `42` | Seed for the `random` split and, with `--preprocess onset`, for the baseline jitter. It does not seed weight initialization or batch order, so two runs with the same settings still give slightly different results. |
 | `--summary` | off | Print the number of recordings per label and exit without training. |
 
-The classes come from the `DEFAULT_LABELS` tuple in `force_matrix_biometrics/cnn.py`, not from whichever folders exist. Every label in the tuple needs a folder under `--dataset-root` with at least one CSV, otherwise the script stops with an error. To add or remove a person, edit that tuple. With `--preprocess onset`, `background` is left out (`PERSON_LABELS`), because the trigger rule already decides when nobody is pressing.
+The classes come from the `DEFAULT_LABELS` tuple in `force_matrix_biometrics/cnn.py`, not from whichever folders exist. Every label in the tuple needs a folder under `--dataset-root` with at least one CSV, otherwise the script stops with an error. To add or remove a person, edit that tuple. `background` is not in it, so neither pipeline reads `dataset/background`: whether someone is pressing is decided by the onset trigger, not by the CNN. Models trained before this change have 9 classes including `background`; `check_cnn_predictions.py` still rebuilds them with the labels saved in their `metadata.json`.
 
 ```powershell
 python train_cnn.py --output-dir models/cnn_random --split-strategy random --seed 7
@@ -259,7 +259,7 @@ The current `dataset/` has 9 labels and 2,500 recordings of 50 frames each, reco
 | `Joanna` | 100 | – | – | 200 | 300 |
 | `background` | 100 | – | – | – | 100 |
 
-`background` holds recordings with nobody touching the sensor.
+`background` holds recordings with nobody touching the sensor. The CNN does not use them; the `AI/` baselines and authentication experiments do.
 
 ## Configuration
 

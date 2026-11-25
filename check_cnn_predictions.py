@@ -14,6 +14,7 @@ from typing import Any
 
 from force_matrix_biometrics.cnn import (
     DEFAULT_MAX_VALUE,
+    OnsetConfig,
     RecordingSample,
     _require_torch,
     build_confusion_matrix,
@@ -70,7 +71,10 @@ def main() -> None:
     if args.seed is None and "seed" not in meta:
         print("NOTE: metadata has no seed (older model); assuming 42.")
 
-    # Recreate exactly the same split that training used.
+    # Recreate exactly the same split and preprocessing that training used. Models saved
+    # before the onset pipeline existed have no "preprocess" key and used "resize".
+    preprocess = meta.get("preprocess") or "resize"
+    onset_config = OnsetConfig(**meta["onset_config"]) if preprocess == "onset" else None
     bundle = build_dataset_bundle(
         dataset_root=args.dataset_root,
         labels=labels,
@@ -78,6 +82,10 @@ def main() -> None:
         validation_ratio=meta["validation_ratio"],
         seed=seed,
         split_strategy=meta["split_strategy"],
+        preprocess=preprocess,
+        onset_config=onset_config,
+        # The saved correction, not a refit, so new recordings cannot shift it.
+        tail_correction=meta.get("tail_correction") if preprocess == "onset" else None,
     )
     if bundle.train_counts != meta["train_counts"] or bundle.validation_counts != meta["validation_counts"]:
         print("WARNING: rebuilt split counts differ from metadata; dataset changed since training?")

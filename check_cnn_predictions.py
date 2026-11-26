@@ -87,6 +87,8 @@ def main() -> None:
         # The saved correction, not a refit, so new recordings cannot shift it.
         tail_correction=meta.get("tail_correction") if preprocess == "onset" else None,
         validation_day=meta.get("validation_day"),
+        skip_practice=meta.get("skip_practice", 0),
+        skip_practice_from=meta.get("skip_practice_from", "start"),
     )
     if bundle.train_counts != meta["train_counts"] or bundle.validation_counts != meta["validation_counts"]:
         print("WARNING: rebuilt split counts differ from metadata; dataset changed since training?")

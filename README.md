@@ -38,6 +38,7 @@ pip install -r requirements-cnn.txt   # adds PyTorch for the CNN
 ├── check_cnn_predictions.py     # re-evaluates a trained CNN
 ├── plot_training_history.py     # plots a trained CNN's training curves
 ├── compare_methods.py           # trains and compares the old and new preprocessing
+├── compare_practice.py          # tests leaving practice presses out of training
 ├── force_matrix_biometrics/
 │   ├── app.py                   # Tkinter app: live heatmap, recording, playback
 │   ├── curve_viewer.py          # Tkinter app: plots the pressure curves of saved recordings
@@ -50,7 +51,7 @@ pip install -r requirements-cnn.txt   # adds PyTorch for the CNN
 ├── AI/                          # KNN and random-forest baselines; authentication/ experiments
 ├── dataset/                     # recordings: <label>/<timestamp>.csv
 ├── models/                      # trained CNN models, one folder per experiment
-├── experiments/                 # output of compare_methods.py
+├── experiments/                 # output of compare_methods.py and compare_practice.py
 ├── requirements.txt             # desktop app dependencies
 └── requirements-cnn.txt         # adds PyTorch for the CNN
 ```
@@ -104,6 +105,7 @@ Four scripts train and check the CNN. Run all of them from the project root:
 - `plot_training_history.py` plots the training curves.
 - `check_cnn_predictions.py` re-checks a trained model's predictions.
 - `compare_methods.py` trains both preprocessing methods under the same conditions and compares them.
+- `compare_practice.py` tests leaving each person's practice presses out of training.
 
 `plot_training_history.py` only needs `matplotlib` and `numpy`. The others also need PyTorch from `requirements-cnn.txt`.
 
@@ -137,6 +139,8 @@ It runs on a CUDA GPU if one is available, then on Apple MPS, and otherwise on t
 | `--validation-ratio` | `0.2` | Share of each label's recordings held out for validation. Must be at least 0 and less than 1. |
 | `--split-strategy` | `time` | `time`: for each label, the most recent recordings (by the timestamp in the filename) go to validation. `random`: each label's recordings are shuffled with `--seed` before splitting. `day`: every recording from `--validation-day` goes to validation and every other day to training, so the model is tested on a session it never saw. With `random` and `time`, validation shares recording sessions with training, which lets a model score well on session cues such as the sensor baseline; `day` does not. |
 | `--validation-day` | none | Required with `--split-strategy day`: the day to hold out, as `20261029` or `2026-10-29`, matched against the date at the start of each file name. `--validation-ratio` is ignored. |
+| `--skip-practice` | `0` | Leave each person's first N recordings of their first recording day out of training; validation is untouched. On their first day people take about 40 presses to settle into a consistent grip. `metadata.json` records how many were left out per person. |
+| `--skip-practice-from` | `start` | `start`: skip the first N of that day (the practice presses). `end`: skip the last N instead, a control that removes the same amount of data from the same day. |
 | `--epochs` | `40` | Number of training epochs. |
 | `--batch-size` | `16` | Recordings per training batch. |
 | `--learning-rate` | `0.001` | Adam learning rate. |
@@ -240,6 +244,24 @@ The output folder gets:
 python compare_methods.py --dry-run          # list the 30 runs, train nothing
 python compare_methods.py                    # train missing runs, then write the summary
 python compare_methods.py --summarize-only   # rewrite the summary from finished runs
+```
+
+### `compare_practice.py`
+
+Tests whether leaving practice presses out of training helps on a new day. It trains the onset model on the held-out-day split in two ways:
+
+- **Practice skipped**: each person's first `--skip-practice` recordings (default 40) of their first day are left out of training.
+- **Control**: the last 40 recordings of that same day are left out instead.
+
+It compares both with the baseline onset runs of `compare_methods.py`, which are reused rather than retrained. If practice-skipped beats the control, the gain comes from removing the practice presses, not just from having less data.
+
+Every person's first day is 2026-09-30. So when that day is held out, the practice presses are validation data, training is the same as the baseline, and that day is not trained. With the defaults that is 2 variants × 3 days × 3 seeds = 18 runs.
+
+The script writes `summary.md` and `practice_comparison.png` to `experiments/practice_comparison`. `summary.md` has accuracy per held-out day, paired differences from the baseline, and per-person results.
+
+```powershell
+python compare_practice.py --dry-run
+python compare_practice.py
 ```
 
 ## AI Baselines

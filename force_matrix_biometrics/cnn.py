@@ -160,6 +160,20 @@ def normalize_day(day: str | None) -> str:
     return digits
 
 
+PRACTICE_FROM_CHOICES = ("start", "end")
+
+
+def practice_recordings(paths: list[Path], count: int, take_from: str = "start") -> list[Path]:
+    """The first `count` recordings, in time order, of the earliest day among `paths` (one
+    person's recordings). On their first day people take about 40 presses to settle into a
+    consistent grip. take_from="end" returns that day's last `count` instead (a control)."""
+    if count <= 0 or not paths:
+        return []
+    first_day = min(recording_day(path) for path in paths)
+    day_paths = sorted((path for path in paths if recording_day(path) == first_day), key=lambda p: Path(p).name)
+    return day_paths[:count] if take_from == "start" else day_paths[-count:]
+
+
 def list_recording_days(dataset_root: str | Path = "dataset", labels: tuple[str, ...] = DEFAULT_LABELS) -> list[str]:
     """Every recording date found under the given label folders, sorted."""
     files_by_label = find_labeled_csv_files(dataset_root, labels)
@@ -459,6 +473,8 @@ def build_dataset_bundle(
     onset_config: OnsetConfig | None = None,
     tail_correction: Frame | None = None,
     validation_day: str | None = None,
+    skip_practice: int = 0,
+    skip_practice_from: str = "start",
 ) -> DatasetBundle:
     """Load, preprocess and split the dataset.
 
@@ -470,9 +486,17 @@ def build_dataset_bundle(
         name) is validation and every other recording is training, so the model is tested on
         a session it never saw. validation_ratio is ignored.
     Only the folders named in labels are read. Pass a model's saved labels to rebuild its data.
+    skip_practice: leave each person's first skip_practice recordings of their first recording
+        day out of TRAINING (validation is untouched). People's first presses on a new sensor
+        are still settling, see practice_recordings(). skip_practice_from="end" leaves out the
+        last ones of that day instead: a control that removes as much data from the same day.
     """
     if not 0.0 <= validation_ratio < 1.0:
         raise ValueError("validation_ratio must be in [0, 1)")
+    if skip_practice < 0:
+        raise ValueError("skip_practice cannot be negative")
+    if skip_practice_from not in PRACTICE_FROM_CHOICES:
+        raise ValueError(f"skip_practice_from must be one of {PRACTICE_FROM_CHOICES}")
     if split_strategy not in SPLIT_CHOICES:
         raise ValueError(f"split_strategy must be one of {SPLIT_CHOICES}")
     if preprocess not in PREPROCESS_CHOICES:
@@ -491,6 +515,7 @@ def build_dataset_bundle(
     train_counts: dict[str, int] = {}
     validation_counts: dict[str, int] = {}
     skipped_no_onset: dict[str, int] = {}
+    practice_excluded: dict[str, int] = {}
     rows = 0
     cols = 0
 
@@ -535,6 +560,14 @@ def build_dataset_bundle(
                 validation_label_samples = samples[-validation_count:] if validation_count else []
                 train_label_samples = samples[:-validation_count] if validation_count else samples
 
+        if skip_practice:
+            practice = set(practice_recordings(files_by_label[label], skip_practice, skip_practice_from))
+            kept = [s for s in train_label_samples if s.path not in practice]
+            practice_excluded[label] = len(train_label_samples) - len(kept)
+            train_label_samples = kept
+            if not train_label_samples:
+                raise ValueError(f"skip_practice left no '{label}' recordings to train on")
+
         validation_samples.extend(validation_label_samples)
         train_samples.extend(train_label_samples)
         validation_counts[label] = len(validation_label_samples)
@@ -556,6 +589,8 @@ def build_dataset_bundle(
         validation_samples = [build_onset_sample(sample, tail_correction, config) for sample in validation_samples]
         target_frames = config.window_frames
         preprocess_stats = _onset_stats(train_samples, validation_samples, skipped_no_onset, config)
+    if skip_practice:
+        preprocess_stats["practice_excluded_from_training"] = practice_excluded
 
     return DatasetBundle(
         train_samples=train_samples,
@@ -642,6 +677,8 @@ def train_cnn(
     preprocess: str = DEFAULT_PREPROCESS,
     onset_config: OnsetConfig | None = None,
     validation_day: str | None = None,
+    skip_practice: int = 0,
+    skip_practice_from: str = "start",
 ) -> dict[str, Any]:
     torch, _, DataLoader, Dataset = _require_torch()
     # The seed fixes the split, the baseline jitter, the starting weights, dropout and the
@@ -658,6 +695,8 @@ def train_cnn(
         preprocess=preprocess,
         onset_config=onset_config,
         validation_day=validation_day,
+        skip_practice=skip_practice,
+        skip_practice_from=skip_practice_from,
     )
     baseline_jitter = bundle.onset_config.baseline_jitter if bundle.onset_config else 0.0
 
@@ -817,6 +856,8 @@ def train_cnn(
         # already under way when recording started. Saved so re-evaluation uses the same one.
         "tail_correction": bundle.tail_correction,
         "preprocess_stats": bundle.preprocess_stats,
+        "skip_practice": skip_practice,
+        "skip_practice_from": skip_practice_from,
         "confusion_matrix": {
             "labels": list(bundle.labels),
             "rows": "actual",
@@ -845,6 +886,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "day: every recording from --validation-day validates, all other days train.",
     )
     parser.add_argument("--validation-day", help="With --split-strategy day: the held-out day, e.g. 20261029.")
+    parser.add_argument("--skip-practice", type=int, default=0,
+                        help="Leave each person's first N recordings of their first day out of training "
+                        "(their practice presses). Validation is untouched. 0 keeps everything.")
+    parser.add_argument("--skip-practice-from", choices=PRACTICE_FROM_CHOICES, default="start",
+                        help="start: the first N recordings (practice). end: the last N of that day instead, "
+                        "a control that removes as much data.")
     parser.add_argument("--epochs", type=int, default=40)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--learning-rate", type=float, default=1e-3)
@@ -888,6 +935,8 @@ def main(argv: list[str] | None = None) -> None:
         seed=args.seed,
         split_strategy=args.split_strategy,
         validation_day=args.validation_day,
+        skip_practice=args.skip_practice,
+        skip_practice_from=args.skip_practice_from,
         preprocess=args.preprocess,
         onset_config=OnsetConfig(
             window_frames=args.window_frames,

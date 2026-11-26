@@ -19,7 +19,7 @@ from force_matrix_biometrics.cnn import (
     _require_torch,
     build_confusion_matrix,
     build_dataset_bundle,
-    build_model,
+    build_model_from_metadata,
     print_confusion_matrix,
 )
 
@@ -94,7 +94,7 @@ def main() -> None:
         print(f"  metadata train={meta['train_counts']} val={meta['validation_counts']}")
 
     device = torch.device("cpu")
-    model = build_model(len(labels))
+    model = build_model_from_metadata(meta)
     model.load_state_dict(torch.load(model_dir / "pressure_cnn.pt", map_location=device))
     model.eval()
 

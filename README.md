@@ -38,6 +38,9 @@ pip install -r requirements-cnn.txt   # adds PyTorch for the CNN
 ├── check_cnn_predictions.py     # re-evaluates a trained CNN
 ├── plot_training_history.py     # plots a trained CNN's training curves
 ├── compare_methods.py           # trains and compares the old and new preprocessing
+├── evaluate_open_set.py         # tests whether the CNN can reject an unseen person
+├── evaluate_multi_press.py      # same test, deciding from several presses at once
+├── compare_open_set.py          # compares models on the open-set test
 ├── force_matrix_biometrics/
 │   ├── app.py                   # Tkinter app: live heatmap, recording, playback
 │   ├── curve_viewer.py          # Tkinter app: plots the pressure curves of saved recordings
@@ -46,11 +49,12 @@ pip install -r requirements-cnn.txt   # adds PyTorch for the CNN
 │   ├── config.py                # SerialProfile: serial and packet settings
 │   ├── profiles.py              # the sensor's settings (HEATMAP_PROFILE)
 │   ├── cnn.py                   # CNN data loading, preprocessing, model and training
+│   ├── metric_learning.py       # ArcFace embedding and cross-day contrastive loss
 │   └── training_plots.py        # draws training curves and the confusion matrix
 ├── AI/                          # KNN and random-forest baselines; authentication/ experiments
 ├── dataset/                     # recordings: <label>/<timestamp>.csv
 ├── models/                      # trained CNN models, one folder per experiment
-├── experiments/                 # output of compare_methods.py
+├── experiments/                 # output of compare_methods.py and evaluate_open_set.py
 ├── requirements.txt             # desktop app dependencies
 └── requirements-cnn.txt         # adds PyTorch for the CNN
 ```
@@ -98,12 +102,13 @@ The script needs a virtual environment named `.venv` or `venv` in the project ro
 
 ## CNN Training and Evaluation
 
-Four scripts train and check the CNN. Run all of them from the project root:
+These scripts train and check the CNN. Run all of them from the project root:
 
 - `train_cnn.py` trains the model.
 - `plot_training_history.py` plots the training curves.
 - `check_cnn_predictions.py` re-checks a trained model's predictions.
 - `compare_methods.py` trains both preprocessing methods under the same conditions and compares them.
+- `evaluate_open_set.py` tests whether scores from the model can reject a person it never saw. `evaluate_multi_press.py` repeats that test deciding from several presses, and `compare_open_set.py` compares models on it.
 
 `plot_training_history.py` only needs `matplotlib` and `numpy`. The others also need PyTorch from `requirements-cnn.txt`.
 
@@ -137,6 +142,8 @@ It runs on a CUDA GPU if one is available, then on Apple MPS, and otherwise on t
 | `--validation-ratio` | `0.2` | Share of each label's recordings held out for validation. Must be at least 0 and less than 1. |
 | `--split-strategy` | `time` | `time`: for each label, the most recent recordings (by the timestamp in the filename) go to validation. `random`: each label's recordings are shuffled with `--seed` before splitting. `day`: every recording from `--validation-day` goes to validation and every other day to training, so the model is tested on a session it never saw. With `random` and `time`, validation shares recording sessions with training, which lets a model score well on session cues such as the sensor baseline; `day` does not. |
 | `--validation-day` | none | Required with `--split-strategy day`: the day to hold out, as `20261029` or `2026-10-29`, matched against the date at the start of each file name. `--validation-ratio` is ignored. |
+| `--labels` | every name in `DEFAULT_LABELS` | People to train on. Leave someone out to keep them unseen, as `evaluate_open_set.py` does for its strangers. |
+| `--loss` | `cross_entropy` | `cross_entropy`: the classifier. `arcface`: a metric-learning embedding for rejecting strangers; see [Metric learning](#metric-learning---loss-arcface). |
 | `--epochs` | `40` | Number of training epochs. |
 | `--batch-size` | `16` | Recordings per training batch. |
 | `--learning-rate` | `0.001` | Adam learning rate. |
@@ -172,6 +179,30 @@ The other settings (5 baseline frames, 3 skipped frames, 5 tail frames, the tole
 
 ```powershell
 python train_cnn.py --preprocess onset --output-dir models/cnn_onset_w20 --window-frames 20
+```
+
+#### Metric learning (`--loss arcface`)
+
+The classifier always names one of the people it was trained on. `--loss arcface` instead trains an embedding in which a person's presses sit close together and away from everyone else, so a distance threshold can reject someone the model never saw (see [`evaluate_open_set.py`](#evaluate_open_setpy)). The code is in `force_matrix_biometrics/metric_learning.py`.
+
+- **Model.** Same convolutional layers as the classifier, then a unit-length embedding (`--embedding-dim` values). Each training person has a learned direction.
+- **ArcFace loss.** A press is scored by the cosine to each person's direction, times `--arcface-scale`. During training, the true person's angle is widened by `--arcface-margin` radians, so a press only scores well when it sits clearly closer to its own direction than to anyone else's.
+- **Cross-day contrastive loss**, added with weight `--cross-day-weight`. For each press, presses by the same person on a *different* day are pulled closer, and presses by other people are pushed away. Presses by the same person on the same day are left out, so matching session conditions earns nothing. `0` trains with ArcFace alone.
+- **Batches.** Each batch draws `--samples-per-person` presses from every training person, spread over that person's recording days, so every batch has cross-day partners. `--batch-size` is not used for training.
+
+`forward()` still returns one score per person, so the model works with `check_cnn_predictions.py`. `metadata.json` records `loss` and the `arcface` settings.
+
+| Argument | Default | Description |
+|---|---|---|
+| `--embedding-dim` | `64` | Length of the embedding. |
+| `--arcface-scale` | `16` | Logit scale. |
+| `--arcface-margin` | `0.3` | Angular margin in radians. |
+| `--cross-day-weight` | `1` | Weight of the cross-day contrastive loss. `0` turns it off. |
+| `--contrastive-temperature` | `0.1` | Temperature of the contrastive loss. |
+| `--samples-per-person` | `8` | Presses per person in each batch. |
+
+```powershell
+python train_cnn.py --preprocess onset --loss arcface --learning-rate 0.001 --epochs 250 --output-dir models/arcface_onset
 ```
 
 ### `plot_training_history.py`
@@ -240,6 +271,77 @@ The output folder gets:
 python compare_methods.py --dry-run          # list the 30 runs, train nothing
 python compare_methods.py                    # train missing runs, then write the summary
 python compare_methods.py --summarize-only   # rewrite the summary from finished runs
+```
+
+### `evaluate_open_set.py`
+
+Answers: can the CNN reject someone it was never trained on? The CNN itself always names one of the people it knows, so this script tests scores computed from a trained model, accepting a recording only when its best score clears a threshold.
+
+Each fold leaves one person out as the stranger (`--labels` with the other seven) and holds out one day (`--split-strategy day`):
+
+- **Enrollment:** the other people's recordings from the training days. The model trains on them, and they also form each person's templates.
+- **Known test:** the other people's recordings from the held-out day.
+- **Stranger test:** every recording of the left-out person.
+
+Three scores are compared, all higher-is-more-alike:
+
+- `softmax`: the class probability.
+- `centroid`: cosine similarity of the model's feature vector to each person's mean enrollment vector.
+- `knn`: mean cosine similarity to that person's 5 nearest enrollment vectors.
+
+The feature vector is the 32 values before the last layer for the classifier, and the embedding for `--loss arcface`. Vectors are centered on the mean enrollment vector, then scaled to length 1.
+
+With the defaults that is 8 strangers × 4 days × 1 seed = 32 trainings, about 25 minutes on a laptop GPU with 3 at a time. Arguments are the same as `compare_methods.py`, except `--method` (one preprocessing, default `onset`), `--strangers` (default everyone) and `--seeds` (default `1`). `--loss` and the metric-learning arguments of `train_cnn.py` choose the model; give each model its own `--output-dir`. Finished trainings and scores are skipped, so running it again resumes. A finished fold trained with other settings stops the script.
+
+The output folder (default `experiments/open_set`) gets:
+
+- One folder per fold: the usual `train_cnn.py` output, `train.log`, and `scores.npz` with every score.
+- `results.csv`: one row per fold.
+- `summary.md`, with four tables:
+  - closed-set accuracy, AUROC, equal error rate between known recordings and strangers, the share of known recordings accepted under the right name when 1% or 5% of strangers get in, and the verification EER;
+  - the EER by stranger;
+  - the EER by held-out day;
+  - the EER for strangers recorded on the held-out day versus on training days, which shows whether the model matches sessions rather than people.
+- `open_set.png`: two charts, the accept-rate trade-off and the EER by stranger.
+
+Thresholds are chosen on each fold's own test scores, so the summary shows how separable the scores are, not the error rate a fixed threshold would give on new data.
+
+```powershell
+python evaluate_open_set.py --dry-run                      # list the 32 folds
+python evaluate_open_set.py                                # classifier: train, score, summarize
+python evaluate_open_set.py --strangers Andy --days 20261029 --epochs 50   # one quick fold
+# metric learning, ArcFace alone and with the cross-day loss
+python evaluate_open_set.py --loss arcface --cross-day-weight 0 --learning-rate 0.001 --output-dir experiments/open_set_arcface
+python evaluate_open_set.py --loss arcface --cross-day-weight 1 --learning-rate 0.001 --output-dir experiments/open_set_arcface_crossday
+```
+
+#### `evaluate_multi_press.py`
+
+Reuses the saved `scores.npz` files, so nothing is retrained. It checks whether deciding from several presses rejects strangers better than deciding from one.
+
+An attempt is n presses in a row by the same person on the same day, in recording order. Their per-person scores are averaged, and the attempt is accepted or rejected like a single press. Every run of n consecutive presses counts as an attempt, so attempts overlap.
+
+It writes `multi_press.md` and `multi_press.png` into the results folder, with the same metrics as `summary.md` for each n. Score files written before file names were saved are re-scored by running `evaluate_open_set.py` again.
+
+```powershell
+python evaluate_multi_press.py                    # n = 1 2 3 5
+python evaluate_multi_press.py --presses 1 3 5 10
+```
+
+#### `compare_open_set.py`
+
+Puts several `evaluate_open_set.py` result folders side by side.
+
+- It uses only the folds every model was trained on, so differences are paired: the same stranger, held-out day and seed.
+- It reports each model's metrics for 1 and 5 presses.
+- It reports each model's difference from the first model, with the number of folds where it did better.
+- It reports accuracy and EER per held-out day.
+
+It writes `experiments/open_set_comparison.md` and `.png`.
+
+```powershell
+python compare_open_set.py                    # classifier vs ArcFace vs ArcFace + cross-day
+python compare_open_set.py --runs "Classifier=experiments/open_set" "ArcFace=experiments/open_set_arcface"
 ```
 
 ## AI Baselines

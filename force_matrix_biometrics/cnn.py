@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 import random
 import statistics
 from collections import Counter
@@ -75,6 +76,40 @@ class OnsetConfig:
 
 
 DEFAULT_ONSET_CONFIG = OnsetConfig()
+
+LOSS_CHOICES = ("cross_entropy", "arcface")
+DEFAULT_LOSS = "cross_entropy"
+
+
+@dataclass(frozen=True)
+class ArcFaceConfig:
+    """Settings for --loss arcface (metric learning, see metric_learning.py).
+
+    embedding_dim: length of the unit-length embedding.
+    scale, margin: ArcFace logit scale and angular margin in radians.
+    cross_day_weight: weight of the cross-day contrastive loss added to ArcFace; 0 turns it off.
+    temperature: temperature of that contrastive loss.
+    samples_per_person: presses drawn per person in each batch, spread over the person's days.
+        A batch holds samples_per_person x people presses; --batch-size is not used for training.
+    """
+
+    embedding_dim: int = 64
+    scale: float = 16.0
+    margin: float = 0.3
+    cross_day_weight: float = 1.0
+    temperature: float = 0.1
+    samples_per_person: int = 8
+
+    def __post_init__(self) -> None:
+        if self.embedding_dim <= 0 or self.samples_per_person < 2:
+            raise ValueError("embedding_dim must be positive and samples_per_person at least 2")
+        if self.scale <= 0 or not 0.0 <= self.margin < math.pi / 2:
+            raise ValueError("scale must be positive and margin in [0, pi/2)")
+        if self.cross_day_weight < 0 or self.temperature <= 0:
+            raise ValueError("cross_day_weight cannot be negative and temperature must be positive")
+
+
+DEFAULT_ARCFACE_CONFIG = ArcFaceConfig()
 
 
 @dataclass(frozen=True)
@@ -576,32 +611,62 @@ def build_dataset_bundle(
     )
 
 
-def build_model(class_count: int) -> Any:
+def _feature_extractor(nn: Any) -> Any:
+    """Convolutional part shared by both models: (1, T, 4, 4) input -> 32 values."""
+    return nn.Sequential(
+        nn.Conv3d(1, 16, kernel_size=(5, 3, 3), padding=(2, 1, 1)),
+        nn.BatchNorm3d(16),
+        nn.ReLU(),
+        nn.MaxPool3d(kernel_size=(2, 1, 1)),
+        nn.Conv3d(16, 32, kernel_size=(3, 3, 3), padding=(1, 1, 1)),
+        nn.BatchNorm3d(32),
+        nn.ReLU(),
+        nn.AdaptiveAvgPool3d((1, 1, 1)),
+    )
+
+
+def build_model(class_count: int, loss: str = DEFAULT_LOSS, arcface: ArcFaceConfig | None = None) -> Any:
+    """loss="cross_entropy": the classifier. loss="arcface": the metric-learning embedding.
+
+    Both have embed(tensor), the vector used for distance scoring, and forward(tensor), one
+    score per training person (softmax of it gives class probabilities).
+    """
     _, nn, _, _ = _require_torch()
+    if loss not in LOSS_CHOICES:
+        raise ValueError(f"loss must be one of {LOSS_CHOICES}")
+    if loss == "arcface":
+        from .metric_learning import build_arcface_model
+
+        config = arcface or DEFAULT_ARCFACE_CONFIG
+        return build_arcface_model(
+            _feature_extractor(nn), class_count, config.embedding_dim, config.scale, config.margin
+        )
 
     class PressureCNN(nn.Module):
         def __init__(self) -> None:
             super().__init__()
-            self.features = nn.Sequential(
-                nn.Conv3d(1, 16, kernel_size=(5, 3, 3), padding=(2, 1, 1)),
-                nn.BatchNorm3d(16),
-                nn.ReLU(),
-                nn.MaxPool3d(kernel_size=(2, 1, 1)),
-                nn.Conv3d(16, 32, kernel_size=(3, 3, 3), padding=(1, 1, 1)),
-                nn.BatchNorm3d(32),
-                nn.ReLU(),
-                nn.AdaptiveAvgPool3d((1, 1, 1)),
-            )
+            self.features = _feature_extractor(nn)
             self.classifier = nn.Sequential(
                 nn.Flatten(),
                 nn.Dropout(0.25),
                 nn.Linear(32, class_count),
             )
 
+        def embed(self, tensor: Any) -> Any:
+            """The 32 values before the last layer."""
+            return self.features(tensor).flatten(1)
+
         def forward(self, tensor: Any) -> Any:
             return self.classifier(self.features(tensor))
 
     return PressureCNN()
+
+
+def build_model_from_metadata(meta: dict[str, Any]) -> Any:
+    """An untrained model of the kind a saved metadata.json describes (older models: classifier)."""
+    loss = meta.get("loss") or DEFAULT_LOSS
+    arcface = ArcFaceConfig(**meta["arcface"]) if loss == "arcface" else None
+    return build_model(len(meta["labels"]), loss=loss, arcface=arcface)
 
 
 def summarize_dataset(dataset_root: str | Path = "dataset", labels: tuple[str, ...] = DEFAULT_LABELS) -> dict[str, int]:
@@ -642,7 +707,13 @@ def train_cnn(
     preprocess: str = DEFAULT_PREPROCESS,
     onset_config: OnsetConfig | None = None,
     validation_day: str | None = None,
+    labels: tuple[str, ...] = DEFAULT_LABELS,
+    loss: str = DEFAULT_LOSS,
+    arcface: ArcFaceConfig | None = None,
 ) -> dict[str, Any]:
+    if loss not in LOSS_CHOICES:
+        raise ValueError(f"loss must be one of {LOSS_CHOICES}")
+    arcface = (arcface or DEFAULT_ARCFACE_CONFIG) if loss == "arcface" else None
     torch, _, DataLoader, Dataset = _require_torch()
     # The seed fixes the split, the baseline jitter, the starting weights, dropout and the
     # batch order, so a run can be repeated. GPU kernels can still differ very slightly.
@@ -651,6 +722,7 @@ def train_cnn(
     torch.backends.cudnn.benchmark = False
     bundle = build_dataset_bundle(
         dataset_root=dataset_root,
+        labels=tuple(labels),
         target_frames=target_frames,
         validation_ratio=validation_ratio,
         seed=seed,
@@ -660,6 +732,8 @@ def train_cnn(
         validation_day=validation_day,
     )
     baseline_jitter = bundle.onset_config.baseline_jitter if bundle.onset_config else 0.0
+    all_days = sorted({recording_day(s.path) for s in bundle.train_samples + bundle.validation_samples})
+    day_to_index = {day: index for index, day in enumerate(all_days)}
 
     class PressureDataset(Dataset):
         def __init__(self, samples: list[RecordingSample], jitter: float = 0.0, jitter_seed: int = 0) -> None:
@@ -670,7 +744,7 @@ def train_cnn(
         def __len__(self) -> int:
             return len(self.samples)
 
-        def __getitem__(self, index: int) -> tuple[Any, Any]:
+        def __getitem__(self, index: int) -> tuple[Any, Any, Any]:
             sample = self.samples[index]
             frames = sample.frames
             if self.jitter > 0.0 and sample.raw_frames is not None and sample.baseline is not None:
@@ -683,7 +757,8 @@ def train_cnn(
             tensor = torch.tensor(frames, dtype=torch.float32).unsqueeze(0)
             tensor = tensor / DEFAULT_MAX_VALUE
             label = torch.tensor(bundle.label_to_index[sample.label], dtype=torch.long)
-            return tensor, label
+            day = torch.tensor(day_to_index[recording_day(sample.path)], dtype=torch.long)
+            return tensor, label, day
 
     device = torch.device("cpu")
     if torch.cuda.is_available():
@@ -691,13 +766,24 @@ def train_cnn(
     elif getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
         device = torch.device("mps")
 
-    train_loader = DataLoader(
-        PressureDataset(bundle.train_samples, jitter=baseline_jitter, jitter_seed=seed),
-        batch_size=batch_size,
-        shuffle=True,
-    )
+    train_dataset = PressureDataset(bundle.train_samples, jitter=baseline_jitter, jitter_seed=seed)
+    if arcface is not None:
+        from .metric_learning import PersonDayBatchSampler, cross_day_contrastive_loss
+
+        people = len(bundle.label_to_index)
+        sampler = PersonDayBatchSampler(
+            labels=[bundle.label_to_index[s.label] for s in bundle.train_samples],
+            days=[day_to_index[recording_day(s.path)] for s in bundle.train_samples],
+            samples_per_person=arcface.samples_per_person,
+            # About one pass over the training recordings per epoch.
+            batches_per_epoch=math.ceil(len(bundle.train_samples) / (arcface.samples_per_person * people)),
+            seed=seed,
+        )
+        train_loader = DataLoader(train_dataset, batch_sampler=sampler)
+    else:
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     validation_loader = DataLoader(PressureDataset(bundle.validation_samples), batch_size=batch_size)
-    model = build_model(class_count=len(bundle.label_to_index)).to(device)
+    model = build_model(class_count=len(bundle.label_to_index), loss=loss, arcface=arcface).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     criterion = torch.nn.CrossEntropyLoss()
     history: list[dict[str, float | int]] = []
@@ -714,6 +800,9 @@ def train_cnn(
         print(f"onset_config={asdict(bundle.onset_config)}")
         print(f"preprocess_stats={json.dumps(bundle.preprocess_stats)}")
     print(f"input_shape=(1, {bundle.target_frames}, {bundle.rows}, {bundle.cols}) device={device}")
+    print(f"loss={loss}")
+    if arcface is not None:
+        print(f"arcface={asdict(arcface)}")
 
     for epoch in range(1, epochs + 1):
         model.train()
@@ -721,17 +810,26 @@ def train_cnn(
         train_correct = 0
         train_seen = 0
 
-        for features, labels in train_loader:
+        for features, labels, days in train_loader:
             features = features.to(device)
             labels = labels.to(device)
             optimizer.zero_grad()
-            logits = model(features)
-            loss = criterion(logits, labels)
-            loss.backward()
+            if arcface is not None:
+                embeddings = model.embed(features)
+                logits = model.scale * model.cosine(embeddings)  # without margin, for accuracy
+                batch_loss = criterion(model.margin_logits(embeddings, labels), labels)
+                if arcface.cross_day_weight > 0:
+                    batch_loss = batch_loss + arcface.cross_day_weight * cross_day_contrastive_loss(
+                        embeddings, labels, days.to(device), arcface.temperature
+                    )
+            else:
+                logits = model(features)
+                batch_loss = criterion(logits, labels)
+            batch_loss.backward()
             optimizer.step()
 
             seen = labels.size(0)
-            train_loss += float(loss.item()) * seen
+            train_loss += float(batch_loss.item()) * seen
             train_correct += int((logits.argmax(dim=1) == labels).sum().item())
             train_seen += seen
 
@@ -740,13 +838,13 @@ def train_cnn(
         validation_correct = 0
         validation_seen = 0
         with torch.no_grad():
-            for features, labels in validation_loader:
+            for features, labels, _ in validation_loader:
                 features = features.to(device)
                 labels = labels.to(device)
                 logits = model(features)
-                loss = criterion(logits, labels)
+                batch_loss = criterion(logits, labels)
                 seen = labels.size(0)
-                validation_loss += float(loss.item()) * seen
+                validation_loss += float(batch_loss.item()) * seen
                 validation_correct += int((logits.argmax(dim=1) == labels).sum().item())
                 validation_seen += seen
 
@@ -770,7 +868,7 @@ def train_cnn(
     validation_predicted: list[int] = []
     model.eval()
     with torch.no_grad():
-        for features, labels in validation_loader:
+        for features, labels, _ in validation_loader:
             features = features.to(device)
             logits = model(features)
             predictions = logits.argmax(dim=1).cpu().tolist()
@@ -817,6 +915,8 @@ def train_cnn(
         # already under way when recording started. Saved so re-evaluation uses the same one.
         "tail_correction": bundle.tail_correction,
         "preprocess_stats": bundle.preprocess_stats,
+        "loss": loss,
+        "arcface": asdict(arcface) if arcface is not None else None,
         "confusion_matrix": {
             "labels": list(bundle.labels),
             "rows": "actual",
@@ -845,6 +945,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "day: every recording from --validation-day validates, all other days train.",
     )
     parser.add_argument("--validation-day", help="With --split-strategy day: the held-out day, e.g. 20261029.")
+    parser.add_argument("--labels", nargs="+", default=list(DEFAULT_LABELS),
+                        help="People to train on (dataset folder names). Default: all of them. "
+                        "Leave someone out to keep them unseen, e.g. as a stranger for open-set tests.")
     parser.add_argument("--epochs", type=int, default=40)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--learning-rate", type=float, default=1e-3)
@@ -866,6 +969,26 @@ def build_arg_parser() -> argparse.ArgumentParser:
                        help="Rise of the 16-cell total above baseline that triggers, in raw/256 units.")
     onset.add_argument("--baseline-jitter", type=float, default=DEFAULT_ONSET_CONFIG.baseline_jitter,
                        help="Training only: scale the baseline by a random factor in [1-j, 1+j]. 0 turns it off.")
+    parser.add_argument(
+        "--loss",
+        choices=LOSS_CHOICES,
+        default=DEFAULT_LOSS,
+        help="cross_entropy: the classifier. arcface: a metric-learning embedding for rejecting strangers.",
+    )
+    metric = parser.add_argument_group("metric learning (only used with --loss arcface)")
+    metric.add_argument("--embedding-dim", type=int, default=DEFAULT_ARCFACE_CONFIG.embedding_dim,
+                        help="Length of the unit-length embedding.")
+    metric.add_argument("--arcface-scale", type=float, default=DEFAULT_ARCFACE_CONFIG.scale,
+                        help="ArcFace logit scale.")
+    metric.add_argument("--arcface-margin", type=float, default=DEFAULT_ARCFACE_CONFIG.margin,
+                        help="ArcFace angular margin in radians.")
+    metric.add_argument("--cross-day-weight", type=float, default=DEFAULT_ARCFACE_CONFIG.cross_day_weight,
+                        help="Weight of the cross-day contrastive loss. 0 trains with ArcFace alone.")
+    metric.add_argument("--contrastive-temperature", type=float, default=DEFAULT_ARCFACE_CONFIG.temperature,
+                        help="Temperature of the cross-day contrastive loss.")
+    metric.add_argument("--samples-per-person", type=int, default=DEFAULT_ARCFACE_CONFIG.samples_per_person,
+                        help="Presses per person in each batch, spread over that person's days. "
+                        "Replaces --batch-size for training.")
     parser.add_argument("--summary", action="store_true", help="Only print dataset counts.")
     return parser
 
@@ -888,12 +1011,22 @@ def main(argv: list[str] | None = None) -> None:
         seed=args.seed,
         split_strategy=args.split_strategy,
         validation_day=args.validation_day,
+        labels=tuple(args.labels),
         preprocess=args.preprocess,
         onset_config=OnsetConfig(
             window_frames=args.window_frames,
             pre_onset_frames=args.pre_onset_frames,
             onset_threshold=args.onset_threshold,
             baseline_jitter=args.baseline_jitter,
+        ),
+        loss=args.loss,
+        arcface=ArcFaceConfig(
+            embedding_dim=args.embedding_dim,
+            scale=args.arcface_scale,
+            margin=args.arcface_margin,
+            cross_day_weight=args.cross_day_weight,
+            temperature=args.contrastive_temperature,
+            samples_per_person=args.samples_per_person,
         ),
     )
 

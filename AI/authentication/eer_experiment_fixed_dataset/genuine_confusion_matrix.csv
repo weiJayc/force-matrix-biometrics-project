@@ -1,4 +1,4 @@
-true\predicted,Amber,Jay,666,Andy,Apple,Reyna,Tiffany,Unknown
+true/outcome,Amber,Jay,666,Andy,Apple,Reyna,Tiffany,Rejected
 Amber,42,0,0,0,0,0,0,18
 Jay,0,38,0,0,0,0,1,11
 666,0,0,35,0,0,0,0,25
@@ -6,3 +6,4 @@ Andy,0,0,0,43,0,0,0,17
 Apple,0,0,0,0,17,0,0,23
 Reyna,0,0,0,0,0,56,0,4
 Tiffany,0,1,0,0,0,0,51,8
+Unknown: Joanna,0,23,0,0,0,0,3,74

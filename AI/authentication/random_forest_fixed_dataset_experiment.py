@@ -239,22 +239,31 @@ def interpolate_curve(
 
 def save_confusion_matrix(
     true_labels: np.ndarray,
-    probabilities: np.ndarray,
-    predictions: np.ndarray,
+    genuine_confidence: np.ndarray,
+    genuine_predictions: np.ndarray,
+    unknown_confidence: np.ndarray,
+    unknown_predictions: np.ndarray,
     threshold: float,
 ) -> np.ndarray:
-    passed = probabilities >= threshold
-    final_labels = np.where(
-        passed,
-        predictions,
-        np.asarray([UNKNOWN] * len(predictions)),
-    )
-    class_names = [*ENROLLED_USERS, UNKNOWN]
-    matrix = np.zeros((len(ENROLLED_USERS), len(class_names)), dtype=np.int64)
-    row_index = {name: index for index, name in enumerate(ENROLLED_USERS)}
+    class_names = [*ENROLLED_USERS, "Rejected"]
+    row_names = [*ENROLLED_USERS, f"Unknown: {UNKNOWN_USER}"]
+    matrix = np.zeros((len(row_names), len(class_names)), dtype=np.int64)
+    row_index = {name: index for index, name in enumerate(row_names)}
     column_index = {name: index for index, name in enumerate(class_names)}
-    for true_label, final_label in zip(true_labels, final_labels):
-        matrix[row_index[str(true_label)], column_index[str(final_label)]] += 1
+
+    genuine_accepted = genuine_confidence >= threshold
+    for true_label, prediction, accepted in zip(
+        true_labels,
+        genuine_predictions,
+        genuine_accepted,
+    ):
+        outcome = str(prediction) if accepted else "Rejected"
+        matrix[row_index[str(true_label)], column_index[outcome]] += 1
+
+    unknown_accepted = unknown_confidence >= threshold
+    for prediction, accepted in zip(unknown_predictions, unknown_accepted):
+        outcome = str(prediction) if accepted else "Rejected"
+        matrix[row_index[f"Unknown: {UNKNOWN_USER}"], column_index[outcome]] += 1
 
     fig, axis = plt.subplots(figsize=(11, 9))
     display = matrix.astype(np.float64)
@@ -263,13 +272,17 @@ def save_confusion_matrix(
     image = axis.imshow(display_percent, cmap="Blues", vmin=0, vmax=1)
     fig.colorbar(image, ax=axis, label="Row Percentage")
     axis.set(
-        title=f"Genuine Confusion Matrix at EER Threshold {threshold:.3f}",
-        xlabel="Predicted / Outcome",
-        ylabel="True Registered User",
+        title=(
+            "Genuine and Unknown Acceptance/Rejection\n"
+            f"EER Threshold {threshold:.3f} "
+            f"(Unknown test user: {UNKNOWN_USER})"
+        ),
+        xlabel="Accepted Identity / Rejected",
+        ylabel="True Registered User / Unknown Test",
         xticks=np.arange(len(class_names)),
-        yticks=np.arange(len(ENROLLED_USERS)),
+        yticks=np.arange(len(row_names)),
         xticklabels=class_names,
-        yticklabels=ENROLLED_USERS,
+        yticklabels=row_names,
     )
     plt.setp(axis.get_xticklabels(), rotation=35, ha="right")
     for row in range(matrix.shape[0]):
@@ -668,14 +681,19 @@ def _run_once() -> None:
         y_genuine,
         genuine_confidence,
         genuine_predictions,
+        unknown_confidence,
+        unknown_predictions,
         eer_threshold,
     )
     with (OUTPUT_DIR / "genuine_confusion_matrix.csv").open(
         "w", newline="", encoding="utf-8"
     ) as file:
         writer = csv.writer(file)
-        writer.writerow(["true\\predicted", *ENROLLED_USERS, UNKNOWN])
-        for user, row in zip(ENROLLED_USERS, confusion):
+        writer.writerow(["true\\outcome", *ENROLLED_USERS, "Rejected"])
+        for user, row in zip(
+            [*ENROLLED_USERS, f"Unknown: {UNKNOWN_USER}"],
+            confusion,
+        ):
             writer.writerow([user, *row.tolist()])
 
     gar_at_eer = interpolate_curve(eer_threshold, gar_curve)

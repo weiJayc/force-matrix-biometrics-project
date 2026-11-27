@@ -1,10 +1,10 @@
 user,total_valid,training,genuine_test,unknown_test,excluded,registration_ratio,test_ratio
 Amber,300,240,60,0,0,0.8,0.2
-Jay,250,200,50,0,0,0.8,0.2
+Jay,300,240,60,0,0,0.8,0.2
 666,300,240,60,0,0,0.8,0.2
 Andy,300,240,60,0,0,0.8,0.2
-Apple,200,160,40,0,0,0.8,0.2
+Apple,300,240,60,0,0,0.8,0.2
 Reyna,300,240,60,0,0,0.8,0.2
 Tiffany,300,240,60,0,0,0.8,0.2
-Joanna,100,0,0,100,0,0.0,0.0
+Joanna,300,0,0,300,0,0.0,0.0
 background,100,0,0,0,100,0.0,0.0

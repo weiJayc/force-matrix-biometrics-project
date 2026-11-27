@@ -6,8 +6,8 @@ This experiment evaluates one fixed Random Forest model using fixed enrolled-use
 
 ## 2. Dataset Information
 
-- Dataset CSV total: 2150
-- Valid 50x16 CSV: 2150
+- Dataset CSV total: 2500
+- Valid 50x16 CSV: 2500
 - Enrolled users: Amber, Jay, 666, Andy, Apple, Reyna, Tiffany
 - Unknown user: Joanna
 - Excluded: background
@@ -18,9 +18,9 @@ This experiment evaluates one fixed Random Forest model using fixed enrolled-use
 
 - Split rule: each enrolled user, 80% training / 20% genuine test
 - Fixed random seed: 42
-- Training samples: 1560
-- Genuine test samples: 390
-- Unknown test samples: 100
+- Training samples: 1680
+- Genuine test samples: 420
+- Unknown test samples: 300
 - Excluded background samples: 100
 
 ## 4. Model Configuration
@@ -33,7 +33,7 @@ This experiment evaluates one fixed Random Forest model using fixed enrolled-use
   - class_weight: None
   - n_jobs: -1
 - Fit count: 1
-- Training sample count: 1560
+- Training sample count: 1680
 - Maximum class probability is used as confidence.
 
 ## 5. Evaluation Metrics
@@ -46,14 +46,14 @@ This experiment evaluates one fixed Random Forest model using fixed enrolled-use
 
 ## 6. Experimental Results
 
-- Raw RF Accuracy: 0.93846154
-- EER: 0.26891891891891895
-- EER Threshold: 0.65055405
-- FAR at EER: 0.26891892
-- FRR at EER: 0.26891892
-- GAR at EER: 0.73108108
-- Genuine Rejection Rate at EER: 0.26264726
-- Genuine Misidentification Rate at EER: 0.00627166
+- Raw RF Accuracy: 0.92380952
+- EER: 0.25964912280701746
+- EER Threshold: 0.64052632
+- FAR at EER: 0.25964912
+- FRR at EER: 0.25964912
+- GAR at EER: 0.74035088
+- Genuine Rejection Rate at EER: 0.25137845
+- Genuine Misidentification Rate at EER: 0.00827068
 - EER calculation method: linear_interpolation
 
 ## 7. Limitations

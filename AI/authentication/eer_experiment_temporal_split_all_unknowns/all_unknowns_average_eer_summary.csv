@@ -1,0 +1,2 @@
+scenario_count,eer,eer_threshold,far_at_eer,frr_at_eer,method,nearest_threshold
+8,0.37356861888111903,0.5406555944055944,0.3735686188811196,0.3735686188811184,linear_interpolation,0.541

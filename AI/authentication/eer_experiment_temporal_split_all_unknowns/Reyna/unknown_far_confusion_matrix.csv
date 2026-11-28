@@ -1,0 +1,9 @@
+outcome,unknown_user,known_user,false_accept_count,false_accept_rate,rejected_count,overall_unknown_far,unknown_sample_count,threshold
+Accepted as 666,Reyna,666,0,0.0,0,0.4,300,0.4693048780487805
+Accepted as Amber,Reyna,Amber,8,0.02666666666666667,0,0.4,300,0.4693048780487805
+Accepted as Andy,Reyna,Andy,0,0.0,0,0.4,300,0.4693048780487805
+Accepted as Apple,Reyna,Apple,0,0.0,0,0.4,300,0.4693048780487805
+Accepted as Jay,Reyna,Jay,3,0.01,0,0.4,300,0.4693048780487805
+Accepted as Joanna,Reyna,Joanna,0,0.0,0,0.4,300,0.4693048780487805
+Accepted as Tiffany,Reyna,Tiffany,109,0.36333333333333334,0,0.4,300,0.4693048780487805
+Rejected,Reyna,,0,0.0,180,0.4,300,0.4693048780487805

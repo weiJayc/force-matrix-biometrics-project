@@ -1,0 +1,9 @@
+true\outcome,666,Amber,Andy,Apple,Jay,Joanna,Tiffany,Rejected
+666,53,1,2,0,0,0,0,4
+Amber,2,54,0,0,0,0,0,4
+Andy,0,0,51,3,0,0,0,6
+Apple,0,3,1,45,0,0,0,11
+Jay,0,0,0,0,54,3,1,2
+Joanna,0,0,0,0,1,54,0,5
+Tiffany,0,0,0,0,3,0,55,2
+Unknown: Reyna,0,6,0,0,5,0,39,250

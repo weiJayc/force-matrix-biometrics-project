@@ -1,0 +1,10 @@
+user,valid_csv_count,frame_shape_valid,folder_label_matches_csv_label,duplicate_file_count,duplicate_matrix_count
+666,300,True,True,0,0
+Amber,300,True,True,0,0
+Andy,300,True,True,0,0
+Apple,300,True,True,0,0
+Jay,300,True,True,0,0
+Reyna,300,True,True,0,0
+Tiffany,300,True,True,0,0
+Joanna,300,True,True,0,0
+background,100,True,True,0,0

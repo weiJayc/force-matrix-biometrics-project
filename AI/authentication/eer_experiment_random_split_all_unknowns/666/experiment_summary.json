@@ -1,0 +1,54 @@
+{
+  "enrolled_users": [
+    "Amber",
+    "Andy",
+    "Apple",
+    "Jay",
+    "Joanna",
+    "Reyna",
+    "Tiffany"
+  ],
+  "unknown_user": "666",
+  "excluded_user": "background",
+  "rf_parameters": {
+    "n_estimators": 100,
+    "random_state": 42,
+    "class_weight": null,
+    "n_jobs": -1
+  },
+  "feature_dimension": 67,
+  "training_sample_count": 1680,
+  "genuine_test_sample_count": 420,
+  "unknown_test_sample_count": 300,
+  "model_fit_count": 1,
+  "genuine_prediction_count": 420,
+  "unknown_prediction_count": 300,
+  "unknown_far_matrix": {
+    "overall_far": 0.21,
+    "rejected_count": 237,
+    "accepted_counts": {
+      "Amber": 16,
+      "Andy": 32,
+      "Apple": 9,
+      "Jay": 1,
+      "Joanna": 0,
+      "Reyna": 0,
+      "Tiffany": 5
+    },
+    "csv_path": "666\\unknown_far_confusion_matrix.csv",
+    "plot_path": "666\\plots\\unknown_far_confusion_matrix_666.png"
+  },
+  "raw_rf_accuracy": 0.9333333333333333,
+  "eer": {
+    "eer": 0.22499999999999948,
+    "eer_threshold": 0.6105,
+    "far_at_eer": 0.2249999999999983,
+    "frr_at_eer": 0.22500000000000064,
+    "method": "linear_interpolation",
+    "nearest_threshold": 0.611
+  },
+  "gar_at_eer": 0.7749999999999994,
+  "frr_at_eer": 0.22500000000000064,
+  "genuine_rejection_rate_at_eer": 0.20476190476190556,
+  "genuine_misidentification_rate_at_eer": 0.020238095238095107
+}

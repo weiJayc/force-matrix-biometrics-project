@@ -1,0 +1,2 @@
+scenario_count,defined_eer_count,mean_eer,std_eer_across_unknown_identities,lowest_eer_unknown,lowest_eer,highest_eer_unknown,highest_eer,std_interpretation
+8,8,0.23983993853845104,0.04654295899642008,Reyna,0.14126984126984143,Andy,0.29267399267399263,Across distinct Unknown-user scenarios; not repeated-split variance

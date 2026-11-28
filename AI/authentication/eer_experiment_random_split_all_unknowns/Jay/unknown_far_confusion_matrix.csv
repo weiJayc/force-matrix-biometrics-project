@@ -1,0 +1,9 @@
+outcome,unknown_user,known_user,false_accept_count,false_accept_rate,rejected_count,overall_unknown_far,unknown_sample_count,threshold
+Accepted as 666,Jay,666,0,0.0,0,0.28,300,0.6508541666666667
+Accepted as Amber,Jay,Amber,0,0.0,0,0.28,300,0.6508541666666667
+Accepted as Andy,Jay,Andy,0,0.0,0,0.28,300,0.6508541666666667
+Accepted as Apple,Jay,Apple,0,0.0,0,0.28,300,0.6508541666666667
+Accepted as Joanna,Jay,Joanna,27,0.09,0,0.28,300,0.6508541666666667
+Accepted as Reyna,Jay,Reyna,0,0.0,0,0.28,300,0.6508541666666667
+Accepted as Tiffany,Jay,Tiffany,57,0.19,0,0.28,300,0.6508541666666667
+Rejected,Jay,,0,0.0,216,0.28,300,0.6508541666666667

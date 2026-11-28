@@ -1,0 +1,145 @@
+panel,true_user,predicted_identity,count,row_total,row_percentage,threshold_policy,scenario_count,scenario_thresholds
+Enrolled Users,666,666,254,420,60.476190476190474,per_scenario_eer_threshold,7,Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,666,Amber,1,420,0.2380952380952381,per_scenario_eer_threshold,7,Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,666,Andy,15,420,3.571428571428571,per_scenario_eer_threshold,7,Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,666,Apple,0,420,0.0,per_scenario_eer_threshold,7,Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,666,Jay,0,420,0.0,per_scenario_eer_threshold,7,Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,666,Joanna,0,420,0.0,per_scenario_eer_threshold,7,Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,666,Reyna,0,420,0.0,per_scenario_eer_threshold,7,Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,666,Tiffany,0,420,0.0,per_scenario_eer_threshold,7,Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,666,Rejected,150,420,35.714285714285715,per_scenario_eer_threshold,7,Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Amber,666,0,420,0.0,per_scenario_eer_threshold,7,666:0.53046914|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Amber,Amber,179,420,42.61904761904762,per_scenario_eer_threshold,7,666:0.53046914|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Amber,Andy,0,420,0.0,per_scenario_eer_threshold,7,666:0.53046914|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Amber,Apple,2,420,0.4761904761904762,per_scenario_eer_threshold,7,666:0.53046914|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Amber,Jay,0,420,0.0,per_scenario_eer_threshold,7,666:0.53046914|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Amber,Joanna,0,420,0.0,per_scenario_eer_threshold,7,666:0.53046914|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Amber,Reyna,0,420,0.0,per_scenario_eer_threshold,7,666:0.53046914|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Amber,Tiffany,7,420,1.6666666666666667,per_scenario_eer_threshold,7,666:0.53046914|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Amber,Rejected,232,420,55.23809523809524,per_scenario_eer_threshold,7,666:0.53046914|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Andy,666,0,420,0.0,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Andy,Amber,1,420,0.2380952380952381,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Andy,Andy,347,420,82.61904761904762,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Andy,Apple,15,420,3.571428571428571,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Andy,Jay,0,420,0.0,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Andy,Joanna,0,420,0.0,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Andy,Reyna,0,420,0.0,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Andy,Tiffany,0,420,0.0,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Andy,Rejected,57,420,13.571428571428571,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Apple,666,3,420,0.7142857142857143,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Apple,Amber,16,420,3.8095238095238098,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Apple,Andy,5,420,1.1904761904761905,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Apple,Apple,193,420,45.95238095238095,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Apple,Jay,0,420,0.0,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Apple,Joanna,0,420,0.0,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Apple,Reyna,0,420,0.0,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Apple,Tiffany,0,420,0.0,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Apple,Rejected,203,420,48.333333333333336,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Jay,666,0,420,0.0,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Jay,Amber,0,420,0.0,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Jay,Andy,0,420,0.0,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Jay,Apple,0,420,0.0,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Jay,Jay,286,420,68.0952380952381,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Jay,Joanna,2,420,0.4761904761904762,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Jay,Reyna,0,420,0.0,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Jay,Tiffany,8,420,1.9047619047619049,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Jay,Rejected,124,420,29.523809523809526,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Joanna:0.56056471|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Joanna,666,0,420,0.0,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Joanna,Amber,5,420,1.1904761904761905,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Joanna,Andy,0,420,0.0,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Joanna,Apple,0,420,0.0,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Joanna,Jay,6,420,1.4285714285714286,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Joanna,Joanna,347,420,82.61904761904762,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Joanna,Reyna,0,420,0.0,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Joanna,Tiffany,0,420,0.0,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Joanna,Rejected,62,420,14.761904761904763,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Reyna:0.46930488|Tiffany:0.53013889
+Enrolled Users,Reyna,666,0,420,0.0,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Tiffany:0.53013889
+Enrolled Users,Reyna,Amber,0,420,0.0,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Tiffany:0.53013889
+Enrolled Users,Reyna,Andy,0,420,0.0,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Tiffany:0.53013889
+Enrolled Users,Reyna,Apple,0,420,0.0,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Tiffany:0.53013889
+Enrolled Users,Reyna,Jay,0,420,0.0,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Tiffany:0.53013889
+Enrolled Users,Reyna,Joanna,0,420,0.0,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Tiffany:0.53013889
+Enrolled Users,Reyna,Reyna,420,420,100.0,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Tiffany:0.53013889
+Enrolled Users,Reyna,Tiffany,0,420,0.0,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Tiffany:0.53013889
+Enrolled Users,Reyna,Rejected,0,420,0.0,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Tiffany:0.53013889
+Enrolled Users,Tiffany,666,1,420,0.2380952380952381,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488
+Enrolled Users,Tiffany,Amber,0,420,0.0,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488
+Enrolled Users,Tiffany,Andy,0,420,0.0,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488
+Enrolled Users,Tiffany,Apple,0,420,0.0,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488
+Enrolled Users,Tiffany,Jay,82,420,19.523809523809526,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488
+Enrolled Users,Tiffany,Joanna,5,420,1.1904761904761905,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488
+Enrolled Users,Tiffany,Reyna,0,420,0.0,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488
+Enrolled Users,Tiffany,Tiffany,51,420,12.142857142857142,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488
+Enrolled Users,Tiffany,Rejected,281,420,66.9047619047619,per_scenario_eer_threshold,7,666:0.53046914|Amber:0.55062727|Andy:0.59050000|Apple:0.56930303|Jay:0.56033962|Joanna:0.56056471|Reyna:0.46930488
+Strangers,666,666,0,300,0.0,per_scenario_eer_threshold,1,666:0.53046914
+Strangers,666,Amber,36,300,12.0,per_scenario_eer_threshold,1,666:0.53046914
+Strangers,666,Andy,44,300,14.666666666666666,per_scenario_eer_threshold,1,666:0.53046914
+Strangers,666,Apple,19,300,6.333333333333334,per_scenario_eer_threshold,1,666:0.53046914
+Strangers,666,Jay,1,300,0.33333333333333337,per_scenario_eer_threshold,1,666:0.53046914
+Strangers,666,Joanna,0,300,0.0,per_scenario_eer_threshold,1,666:0.53046914
+Strangers,666,Reyna,0,300,0.0,per_scenario_eer_threshold,1,666:0.53046914
+Strangers,666,Tiffany,6,300,2.0,per_scenario_eer_threshold,1,666:0.53046914
+Strangers,666,Rejected,194,300,64.66666666666666,per_scenario_eer_threshold,1,666:0.53046914
+Strangers,Amber,666,8,300,2.666666666666667,per_scenario_eer_threshold,1,Amber:0.55062727
+Strangers,Amber,Amber,0,300,0.0,per_scenario_eer_threshold,1,Amber:0.55062727
+Strangers,Amber,Andy,0,300,0.0,per_scenario_eer_threshold,1,Amber:0.55062727
+Strangers,Amber,Apple,82,300,27.333333333333332,per_scenario_eer_threshold,1,Amber:0.55062727
+Strangers,Amber,Jay,0,300,0.0,per_scenario_eer_threshold,1,Amber:0.55062727
+Strangers,Amber,Joanna,0,300,0.0,per_scenario_eer_threshold,1,Amber:0.55062727
+Strangers,Amber,Reyna,0,300,0.0,per_scenario_eer_threshold,1,Amber:0.55062727
+Strangers,Amber,Tiffany,2,300,0.6666666666666667,per_scenario_eer_threshold,1,Amber:0.55062727
+Strangers,Amber,Rejected,208,300,69.33333333333334,per_scenario_eer_threshold,1,Amber:0.55062727
+Strangers,Andy,666,57,300,19.0,per_scenario_eer_threshold,1,Andy:0.59050000
+Strangers,Andy,Amber,0,300,0.0,per_scenario_eer_threshold,1,Andy:0.59050000
+Strangers,Andy,Andy,0,300,0.0,per_scenario_eer_threshold,1,Andy:0.59050000
+Strangers,Andy,Apple,79,300,26.333333333333332,per_scenario_eer_threshold,1,Andy:0.59050000
+Strangers,Andy,Jay,0,300,0.0,per_scenario_eer_threshold,1,Andy:0.59050000
+Strangers,Andy,Joanna,0,300,0.0,per_scenario_eer_threshold,1,Andy:0.59050000
+Strangers,Andy,Reyna,0,300,0.0,per_scenario_eer_threshold,1,Andy:0.59050000
+Strangers,Andy,Tiffany,0,300,0.0,per_scenario_eer_threshold,1,Andy:0.59050000
+Strangers,Andy,Rejected,164,300,54.666666666666664,per_scenario_eer_threshold,1,Andy:0.59050000
+Strangers,Apple,666,5,300,1.6666666666666667,per_scenario_eer_threshold,1,Apple:0.56930303
+Strangers,Apple,Amber,63,300,21.0,per_scenario_eer_threshold,1,Apple:0.56930303
+Strangers,Apple,Andy,37,300,12.333333333333334,per_scenario_eer_threshold,1,Apple:0.56930303
+Strangers,Apple,Apple,0,300,0.0,per_scenario_eer_threshold,1,Apple:0.56930303
+Strangers,Apple,Jay,0,300,0.0,per_scenario_eer_threshold,1,Apple:0.56930303
+Strangers,Apple,Joanna,0,300,0.0,per_scenario_eer_threshold,1,Apple:0.56930303
+Strangers,Apple,Reyna,0,300,0.0,per_scenario_eer_threshold,1,Apple:0.56930303
+Strangers,Apple,Tiffany,0,300,0.0,per_scenario_eer_threshold,1,Apple:0.56930303
+Strangers,Apple,Rejected,195,300,65.0,per_scenario_eer_threshold,1,Apple:0.56930303
+Strangers,Jay,666,0,300,0.0,per_scenario_eer_threshold,1,Jay:0.56033962
+Strangers,Jay,Amber,0,300,0.0,per_scenario_eer_threshold,1,Jay:0.56033962
+Strangers,Jay,Andy,0,300,0.0,per_scenario_eer_threshold,1,Jay:0.56033962
+Strangers,Jay,Apple,0,300,0.0,per_scenario_eer_threshold,1,Jay:0.56033962
+Strangers,Jay,Jay,0,300,0.0,per_scenario_eer_threshold,1,Jay:0.56033962
+Strangers,Jay,Joanna,66,300,22.0,per_scenario_eer_threshold,1,Jay:0.56033962
+Strangers,Jay,Reyna,2,300,0.6666666666666667,per_scenario_eer_threshold,1,Jay:0.56033962
+Strangers,Jay,Tiffany,52,300,17.333333333333336,per_scenario_eer_threshold,1,Jay:0.56033962
+Strangers,Jay,Rejected,180,300,60.0,per_scenario_eer_threshold,1,Jay:0.56033962
+Strangers,Joanna,666,0,300,0.0,per_scenario_eer_threshold,1,Joanna:0.56056471
+Strangers,Joanna,Amber,5,300,1.6666666666666667,per_scenario_eer_threshold,1,Joanna:0.56056471
+Strangers,Joanna,Andy,0,300,0.0,per_scenario_eer_threshold,1,Joanna:0.56056471
+Strangers,Joanna,Apple,0,300,0.0,per_scenario_eer_threshold,1,Joanna:0.56056471
+Strangers,Joanna,Jay,112,300,37.333333333333336,per_scenario_eer_threshold,1,Joanna:0.56056471
+Strangers,Joanna,Joanna,0,300,0.0,per_scenario_eer_threshold,1,Joanna:0.56056471
+Strangers,Joanna,Reyna,0,300,0.0,per_scenario_eer_threshold,1,Joanna:0.56056471
+Strangers,Joanna,Tiffany,12,300,4.0,per_scenario_eer_threshold,1,Joanna:0.56056471
+Strangers,Joanna,Rejected,171,300,56.99999999999999,per_scenario_eer_threshold,1,Joanna:0.56056471
+Strangers,Reyna,666,0,300,0.0,per_scenario_eer_threshold,1,Reyna:0.46930488
+Strangers,Reyna,Amber,8,300,2.666666666666667,per_scenario_eer_threshold,1,Reyna:0.46930488
+Strangers,Reyna,Andy,0,300,0.0,per_scenario_eer_threshold,1,Reyna:0.46930488
+Strangers,Reyna,Apple,0,300,0.0,per_scenario_eer_threshold,1,Reyna:0.46930488
+Strangers,Reyna,Jay,3,300,1.0,per_scenario_eer_threshold,1,Reyna:0.46930488
+Strangers,Reyna,Joanna,0,300,0.0,per_scenario_eer_threshold,1,Reyna:0.46930488
+Strangers,Reyna,Reyna,0,300,0.0,per_scenario_eer_threshold,1,Reyna:0.46930488
+Strangers,Reyna,Tiffany,109,300,36.333333333333336,per_scenario_eer_threshold,1,Reyna:0.46930488
+Strangers,Reyna,Rejected,180,300,60.0,per_scenario_eer_threshold,1,Reyna:0.46930488
+Strangers,Tiffany,666,0,300,0.0,per_scenario_eer_threshold,1,Tiffany:0.53013889
+Strangers,Tiffany,Amber,0,300,0.0,per_scenario_eer_threshold,1,Tiffany:0.53013889
+Strangers,Tiffany,Andy,0,300,0.0,per_scenario_eer_threshold,1,Tiffany:0.53013889
+Strangers,Tiffany,Apple,4,300,1.3333333333333335,per_scenario_eer_threshold,1,Tiffany:0.53013889
+Strangers,Tiffany,Jay,67,300,22.333333333333332,per_scenario_eer_threshold,1,Tiffany:0.53013889
+Strangers,Tiffany,Joanna,0,300,0.0,per_scenario_eer_threshold,1,Tiffany:0.53013889
+Strangers,Tiffany,Reyna,8,300,2.666666666666667,per_scenario_eer_threshold,1,Tiffany:0.53013889
+Strangers,Tiffany,Tiffany,0,300,0.0,per_scenario_eer_threshold,1,Tiffany:0.53013889
+Strangers,Tiffany,Rejected,221,300,73.66666666666667,per_scenario_eer_threshold,1,Tiffany:0.53013889

@@ -64,14 +64,10 @@ USERS = (
 
 NO_CONTACT_USER = "background"
 
-# Each user has 100 samples: 80 for registration/training, 20 for validation/testing.
-REGISTRATION_COUNTS = (
-    80,
-)
+# Each user's valid samples are split dynamically using this ratio.
+REGISTRATION_RATIO = 0.8
 
-TEST_COUNT = 20
-
-REPEATS = 20
+REPEAT = 1
 
 RANDOM_SEED = 42
 
@@ -85,11 +81,12 @@ RANDOM_SEED = 42
 
 #   20 -> calibration
 
-#   TEST_COUNT -> formal no-contact test
+#   BACKGROUND_TEST_COUNT -> formal no-contact test
 
 # ------------------------------------------------------------
 
 BACKGROUND_CALIBRATION_COUNT = 20
+BACKGROUND_TEST_COUNT = 20
 
 # ------------------------------------------------------------
 
@@ -1164,42 +1161,31 @@ def create_user_split(
 
     user_indices: np.ndarray,
 
-    registration_count: int,
-
     rng: np.random.Generator,
-
 ) -> tuple[np.ndarray, np.ndarray]:
 
     """
 
     Split one user's data into:
 
-        registration_count
+        floor(total_count * REGISTRATION_RATIO) registration samples
 
-        +
-
-        TEST_COUNT test samples
+        and all remaining samples as test samples.
 
     No overlap.
 
     """
 
-    required = (
-
-        registration_count
-
-        + TEST_COUNT
-
+    total_count = len(user_indices)
+    registration_count = int(
+        total_count * REGISTRATION_RATIO
     )
-
-    if len(user_indices) < required:
-
+    test_count = total_count - registration_count
+    if registration_count < 1 or test_count < 1:
         raise ValueError(
-
-            f"Need {required} samples, "
-
-            f"but only {len(user_indices)} available."
-
+            "Each user needs at least one "
+            "registration and one test sample; "
+            f"got {total_count}."
         )
 
     shuffled = rng.permutation(
@@ -1221,13 +1207,9 @@ def create_user_split(
     test_indices = (
 
         shuffled[
-
             registration_count:
-
             registration_count
-
-            + TEST_COUNT
-
+            + test_count
         ]
 
     )
@@ -1260,15 +1242,14 @@ def create_background_split(
 
         20 -> Contact Gate calibration
 
-        TEST_COUNT -> unseen no-contact test
+        BACKGROUND_TEST_COUNT -> unseen no-contact test
 
     """
 
     required = (
 
         BACKGROUND_CALIBRATION_COUNT
-
-        + TEST_COUNT
+        + BACKGROUND_TEST_COUNT
 
     )
 
@@ -1310,7 +1291,7 @@ def create_background_split(
 
             BACKGROUND_CALIBRATION_COUNT
 
-            + TEST_COUNT
+            + BACKGROUND_TEST_COUNT
 
         ]
 
@@ -1888,7 +1869,7 @@ def run_one_experiment(
 
     #
 
-    #     (len(USERS) - 1) users × TEST_COUNT samples
+    #     Each impostor user's dynamically sized test split
 
     #
 
@@ -1915,13 +1896,12 @@ def run_one_experiment(
             continue
 
         impostor_indices = (
-
             test_indices_by_user[
-
                 impostor_user
-
             ]
-
+        )
+        impostor_test_count = len(
+            impostor_indices
         )
 
         accepted_count = 0
@@ -2010,8 +1990,7 @@ def run_one_experiment(
 
             "reject":
 
-                TEST_COUNT
-
+                impostor_test_count
                 - accepted_count,
 
             "contact":
@@ -2026,7 +2005,7 @@ def run_one_experiment(
 
                     /
 
-                    TEST_COUNT
+                    impostor_test_count
 
                 ),
 
@@ -2070,7 +2049,7 @@ def run_one_experiment(
 
         /
 
-        TEST_COUNT
+        len(genuine_test_indices)
 
     )
 
@@ -2113,6 +2092,32 @@ def run_one_experiment(
         "registration_count":
 
             registration_count,
+
+        "test_count":
+
+            len(genuine_test_indices),
+
+        "total_count":
+
+            registration_count
+
+            + len(genuine_test_indices),
+
+        "registration_ratio":
+
+            registration_count
+
+            /
+
+            (registration_count + len(genuine_test_indices)),
+
+        "test_ratio":
+
+            len(genuine_test_indices)
+
+            /
+
+            (registration_count + len(genuine_test_indices)),
 
         "repeat":
 
@@ -2210,7 +2215,7 @@ def run_one_experiment(
 
         "genuine_reject":
 
-            TEST_COUNT
+            len(genuine_test_indices)
 
             -
 
@@ -2292,8 +2297,6 @@ def prepare_repeat_split(
 
     labels: np.ndarray,
 
-    registration_count: int,
-
     rng: np.random.Generator,
 
 ):
@@ -2357,8 +2360,6 @@ def prepare_repeat_split(
         ) = create_user_split(
 
             user_indices[user],
-
-            registration_count,
 
             rng,
 
@@ -2452,13 +2453,7 @@ def print_contact_gate_summary(
 
     print("-" * 110)
 
-    for registration_count in (
-
-        REGISTRATION_COUNTS
-
-    ):
-
-        for user in USERS:
+    for user in USERS:
 
             selected = [
 
@@ -2467,14 +2462,6 @@ def print_contact_gate_summary(
                 for row in rows
 
                 if row[
-
-                    "registration_count"
-
-                ]
-
-                == registration_count
-
-                and row[
 
                     "template_user"
 
@@ -2556,7 +2543,7 @@ def print_contact_gate_summary(
 
             print(
 
-                f"{registration_count:<6}"
+                f"{selected[0]['registration_count']:<6}"
 
                 f"{user:<15}"
 
@@ -2618,13 +2605,7 @@ def print_sequence_statistics_summary(
 
     print("-" * 110)
 
-    for registration_count in (
-
-        REGISTRATION_COUNTS
-
-    ):
-
-        for user in USERS:
+    for user in USERS:
 
             selected = [
 
@@ -2633,14 +2614,6 @@ def print_sequence_statistics_summary(
                 for row in rows
 
                 if row[
-
-                    "registration_count"
-
-                ]
-
-                == registration_count
-
-                and row[
 
                     "template_user"
 
@@ -2708,7 +2681,7 @@ def print_sequence_statistics_summary(
 
             print(
 
-                f"{registration_count:<6}"
+                f"{selected[0]['registration_count']:<6}"
 
                 f"{user:<15}"
 
@@ -2810,13 +2783,7 @@ def print_e2e_summary(
 
     print("-" * 155)
 
-    for registration_count in (
-
-        REGISTRATION_COUNTS
-
-    ):
-
-        for user in USERS:
+    for user in USERS:
 
             selected = [
 
@@ -2825,14 +2792,6 @@ def print_e2e_summary(
                 for row in rows
 
                 if row[
-
-                    "registration_count"
-
-                ]
-
-                == registration_count
-
-                and row[
 
                     "template_user"
 
@@ -2942,7 +2901,7 @@ def print_e2e_summary(
 
             print(
 
-                f"{registration_count:<6}"
+                f"{selected[0]['registration_count']:<6}"
 
                 f"{user:<12}"
 
@@ -3016,13 +2975,7 @@ def print_standalone_vs_e2e(
 
     print("-" * 110)
 
-    for registration_count in (
-
-        REGISTRATION_COUNTS
-
-    ):
-
-        for user in USERS:
+    for user in USERS:
 
             selected = [
 
@@ -3031,14 +2984,6 @@ def print_standalone_vs_e2e(
                 for row in rows
 
                 if row[
-
-                    "registration_count"
-
-                ]
-
-                == registration_count
-
-                and row[
 
                     "template_user"
 
@@ -3162,7 +3107,7 @@ def print_standalone_vs_e2e(
 
             print(
 
-                f"{registration_count:<6}"
+                f"{selected[0]['registration_count']:<6}"
 
                 f"{user:<12}"
 
@@ -3304,247 +3249,341 @@ def run_benchmark(
 
     # ========================================================
 
-    # Registration Count
+    # Dynamic per-user registration/test split.
+    rng = np.random.default_rng(RANDOM_SEED)
 
-    # ========================================================
+    print()
 
-    for registration_count in (
+    print("=" * 110)
 
-        REGISTRATION_COUNTS
+    print(
+        f"REGISTRATION RATIO = {REGISTRATION_RATIO}"
+    )
 
-    ):
+    print("=" * 110)
+
+    # ====================================================
+
+    # Random generator
+
+    #
+
+    # A deterministic random stream is shared by all configured repeats.
+
+    # ====================================================
+
+    # The same deterministic stream is used across repeats.
+
+    # ====================================================
+
+    # Repeat
+
+    # ====================================================
+
+    for repeat in range(1, REPEAT + 1):
 
         print()
 
-        print("=" * 110)
-
         print(
 
-            f"REGISTRATION = "
+            f"Running RegistrationRatio="
+            f"{REGISTRATION_RATIO}, "
 
-            f"{registration_count}"
+            f"Repeat={repeat:02d}"
 
         )
 
-        print("=" * 110)
+        # =================================================
 
-        # ====================================================
-
-        # Random generator
+        # ONE split for this repeat
 
         #
 
-        # Each registration count gets its own deterministic
+        # Same data is used by:
 
-        # sequence of 20 repeats.
+        #
 
-        # ====================================================
+        #   Contact Gate
 
-        rng = np.random.default_rng(
+        #   Sequence Statistics
 
-            RANDOM_SEED
+        #   E2E
+
+        # =================================================
+
+        (
+
+            registration_indices_by_user,
+
+            test_indices_by_user,
+
+            background_calibration_indices,
+
+            no_contact_test_indices,
+
+        ) = prepare_repeat_split(
+
+            X,
+
+            labels,
+
+            rng,
 
         )
 
-        # ====================================================
-
-        # Repeat
-
-        # ====================================================
-
-        for repeat in range(
-
-            1,
-
-            REPEATS + 1,
-
-        ):
-
+        if repeat == 1:
             print()
+            print("DYNAMIC USER DATA SPLIT")
+            print(
+                f"{'User':<15}"
+                f"{'Total':>10}"
+                f"{'Registration':>15}"
+                f"{'Test':>10}"
+                f"{'Reg Ratio':>12}"
+                f"{'Test Ratio':>12}"
+            )
+            for user in USERS:
+                total_count = len(
+                    registration_indices_by_user[user]
+                ) + len(
+                    test_indices_by_user[user]
+                )
+                registration_count = len(
+                    registration_indices_by_user[user]
+                )
+                test_count = len(
+                    test_indices_by_user[user]
+                )
+                print(
+                    f"{user:<15}"
+                    f"{total_count:>10}"
+                    f"{registration_count:>15}"
+                    f"{test_count:>10}"
+                    f"{registration_count / total_count:>11.2%}"
+                    f"{test_count / total_count:>11.2%}"
+                )
+
+        # =================================================
+
+        # Each user becomes registration identity
+
+        # =================================================
+
+        for template_user in USERS:
 
             print(
 
-                f"Running Reg="
+                f"    Template="
 
-                f"{registration_count}, "
+                f"{template_user}"
 
-                f"Repeat={repeat:02d}"
+            )
+
+            result = (
+
+                run_one_experiment(
+
+                    X=X,
+
+                    X_features=X_features,
+
+                    labels=labels,
+
+                    template_user=template_user,
+
+                    registration_count=len(
+                        registration_indices_by_user[
+                            template_user
+                        ]
+                    ),
+
+                    repeat=repeat,
+
+                    registration_indices_by_user=(
+
+                        registration_indices_by_user
+
+                    ),
+
+                    test_indices_by_user=(
+
+                        test_indices_by_user
+
+                    ),
+
+                    background_calibration_indices=(
+
+                        background_calibration_indices
+
+                    ),
+
+                    no_contact_test_indices=(
+
+                        no_contact_test_indices
+
+                    ),
+
+                )
 
             )
 
             # =================================================
 
-            # ONE split for this repeat
+            # Sequence Statistics STANDALONE
 
             #
 
-            # Same data is used by:
+            # Here we intentionally do NOT use Contact Gate.
 
             #
 
-            #   Contact Gate
+            # This answers:
 
-            #   Sequence Statistics
+            #
 
-            #   E2E
+            # "如果所有 samples 都直接進入
+
+            #  Sequence Statistics，
+
+            #  身份辨識效果如何？"
 
             # =================================================
 
-            (
+            registration_indices = (
 
-                registration_indices_by_user,
+                registration_indices_by_user[
 
-                test_indices_by_user,
+                    template_user
 
-                background_calibration_indices,
-
-                no_contact_test_indices,
-
-            ) = prepare_repeat_split(
-
-                X,
-
-                labels,
-
-                registration_count,
-
-                rng,
+                ]
 
             )
 
-            # =================================================
+            registration_features = (
 
-            # Each user becomes registration identity
+                X_features[
 
-            # =================================================
+                    registration_indices
 
-            for template_user in USERS:
+                ]
 
-                print(
+            )
 
-                    f"    Template="
+            sequence_template = (
 
-                    f"{template_user}"
+                build_sequence_template(
 
-                )
-
-                result = (
-
-                    run_one_experiment(
-
-                        X=X,
-
-                        X_features=X_features,
-
-                        labels=labels,
-
-                        template_user=template_user,
-
-                        registration_count=(
-
-                            registration_count
-
-                        ),
-
-                        repeat=repeat,
-
-                        registration_indices_by_user=(
-
-                            registration_indices_by_user
-
-                        ),
-
-                        test_indices_by_user=(
-
-                            test_indices_by_user
-
-                        ),
-
-                        background_calibration_indices=(
-
-                            background_calibration_indices
-
-                        ),
-
-                        no_contact_test_indices=(
-
-                            no_contact_test_indices
-
-                        ),
-
-                    )
+                    registration_features
 
                 )
 
-                # =================================================
+            )
 
-                # Sequence Statistics STANDALONE
+            # -------------------------------------------------
 
-                #
+            # Genuine standalone
 
-                # Here we intentionally do NOT use Contact Gate.
+            # -------------------------------------------------
 
-                #
+            genuine_indices = (
 
-                # This answers:
+                test_indices_by_user[
 
-                #
+                    template_user
 
-                # "如果所有 samples 都直接進入
+                ]
 
-                #  Sequence Statistics，
+            )
 
-                #  身份辨識效果如何？"
+            genuine_distances = (
 
-                # =================================================
+                calculate_sequence_distance(
 
-                registration_indices = (
-
-                    registration_indices_by_user[
-
-                        template_user
-
-                    ]
-
-                )
-
-                registration_features = (
+                    sequence_template,
 
                     X_features[
 
-                        registration_indices
+                        genuine_indices
 
-                    ]
+                    ],
 
                 )
 
-                sequence_template = (
+            )
 
-                    build_sequence_template(
+            genuine_accept = (
 
-                        registration_features
+                genuine_distances
+
+                <=
+
+                sequence_template[
+
+                    "threshold"
+
+                ]
+
+            )
+
+            standalone_genuine_accept = (
+
+                int(
+
+                    np.sum(
+
+                        genuine_accept
 
                     )
 
                 )
 
-                # -------------------------------------------------
+            )
 
-                # Genuine standalone
+            standalone_gar = (
 
-                # -------------------------------------------------
+                standalone_genuine_accept
 
-                genuine_indices = (
+                /
+
+                len(genuine_indices)
+
+            )
+
+            # -------------------------------------------------
+
+            # Impostor standalone
+
+            # -------------------------------------------------
+
+            standalone_impostor_accept = 0
+
+            standalone_impostor_total = 0
+
+            for impostor_user in USERS:
+
+                if (
+
+                    impostor_user
+
+                    ==
+
+                    template_user
+
+                ):
+
+                    continue
+
+                impostor_indices = (
 
                     test_indices_by_user[
 
-                        template_user
+                        impostor_user
 
                     ]
 
                 )
 
-                genuine_distances = (
+                distances = (
 
                     calculate_sequence_distance(
 
@@ -3552,7 +3591,7 @@ def run_benchmark(
 
                         X_features[
 
-                            genuine_indices
+                            impostor_indices
 
                         ],
 
@@ -3560,9 +3599,9 @@ def run_benchmark(
 
                 )
 
-                genuine_accept = (
+                accepted = (
 
-                    genuine_distances
+                    distances
 
                     <=
 
@@ -3574,13 +3613,13 @@ def run_benchmark(
 
                 )
 
-                standalone_genuine_accept = (
+                standalone_impostor_accept += (
 
                     int(
 
                         np.sum(
 
-                            genuine_accept
+                            accepted
 
                         )
 
@@ -3588,163 +3627,75 @@ def run_benchmark(
 
                 )
 
-                standalone_gar = (
+                standalone_impostor_total += (
 
-                    standalone_genuine_accept
+                    len(
 
-                    /
+                        impostor_indices
 
-                    TEST_COUNT
+                    )
 
                 )
 
-                # -------------------------------------------------
+            standalone_far = (
 
-                # Impostor standalone
+                standalone_impostor_accept
 
-                # -------------------------------------------------
+                /
 
-                standalone_impostor_accept = 0
+                standalone_impostor_total
 
-                standalone_impostor_total = 0
+                if standalone_impostor_total
 
-                for impostor_user in USERS:
+                > 0
 
-                    if (
+                else 0.0
 
-                        impostor_user
+            )
 
-                        ==
+            # =================================================
 
-                        template_user
+            # Add standalone values
 
-                    ):
+            # =================================================
 
-                        continue
+            result[
 
-                    impostor_indices = (
+                "standalone_gar"
 
-                        test_indices_by_user[
+            ] = standalone_gar
 
-                            impostor_user
+            result[
 
-                        ]
+                "standalone_far"
 
-                    )
+            ] = standalone_far
 
-                    distances = (
+            result[
 
-                        calculate_sequence_distance(
+                "standalone_frr"
 
-                            sequence_template,
+            ] = (
 
-                            X_features[
+                1.0
 
-                                impostor_indices
+                -
 
-                            ],
+                standalone_gar
 
-                        )
+            )
 
-                    )
+            all_rows.append(
 
-                    accepted = (
+                result
 
-                        distances
+            )
 
-                        <=
-
-                        sequence_template[
-
-                            "threshold"
-
-                        ]
-
-                    )
-
-                    standalone_impostor_accept += (
-
-                        int(
-
-                            np.sum(
-
-                                accepted
-
-                            )
-
-                        )
-
-                    )
-
-                    standalone_impostor_total += (
-
-                        len(
-
-                            impostor_indices
-
-                        )
-
-                    )
-
-                standalone_far = (
-
-                    standalone_impostor_accept
-
-                    /
-
-                    standalone_impostor_total
-
-                    if standalone_impostor_total
-
-                    > 0
-
-                    else 0.0
-
-                )
-
-                # =================================================
-
-                # Add standalone values
-
-                # =================================================
-
-                result[
-
-                    "standalone_gar"
-
-                ] = standalone_gar
-
-                result[
-
-                    "standalone_far"
-
-                ] = standalone_far
-
-                result[
-
-                    "standalone_frr"
-
-                ] = (
-
-                    1.0
-
-                    -
-
-                    standalone_gar
-
-                )
-
-                all_rows.append(
-
-                    result
-
-                )
-
-                # Persist each completed experiment immediately for live plotting.
-                # The plotter reads these actual runtime results; no values are hardcoded.
-                with LIVE_RESULTS_PATH.open("a", encoding="utf-8") as live_file:
-                    live_file.write(json.dumps(result, ensure_ascii=False, allow_nan=True) + "\n")
-                    live_file.flush()
+            # Persist each completed experiment immediately for live plotting.
+            # The plotter reads these actual runtime results; no values are hardcoded.
+            with LIVE_RESULTS_PATH.open("a", encoding="utf-8") as live_file:
+                live_file.write(json.dumps(result, ensure_ascii=False, allow_nan=True) + "\n")
+                live_file.flush()
 
     return all_rows
 
@@ -3850,7 +3801,7 @@ def main() -> None:
 
         f"Registration counts         : "
 
-        f"{REGISTRATION_COUNTS}"
+        f"{REGISTRATION_RATIO:.0%}"
 
     )
 
@@ -3858,7 +3809,7 @@ def main() -> None:
 
         f"Test count                  : "
 
-        f"{TEST_COUNT}"
+        f"dynamic remaining {1 - REGISTRATION_RATIO:.0%}"
 
     )
 
@@ -3866,7 +3817,7 @@ def main() -> None:
 
         f"Repeats                     : "
 
-        f"{REPEATS}"
+        f"{REPEAT}"
 
     )
 

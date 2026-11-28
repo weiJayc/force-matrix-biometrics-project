@@ -26,10 +26,9 @@ RF_N_JOBS = -1
 from data_loader import load_dataset
 from sequence_statistics_contact_gate_benchmark_live import (
     NO_CONTACT_USER,
+    REGISTRATION_RATIO,
     RANDOM_SEED,
-    REGISTRATION_COUNTS,
-    REPEATS,
-    TEST_COUNT,
+    REPEAT,
     USERS,
     create_user_split,
     extract_dataset_statistics,
@@ -84,14 +83,13 @@ def print_dataset_information(X: np.ndarray, labels: np.ndarray) -> None:
 
 def prepare_repeat_split(
     labels: np.ndarray,
-    registration_count: int,
     rng: np.random.Generator,
 ) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
     registration_by_class: dict[str, np.ndarray] = {}
     test_by_class: dict[str, np.ndarray] = {}
     for class_name in ALL_CLASSES:
         indices = np.where(labels == class_name)[0]
-        registration, test = create_user_split(indices, registration_count, rng)
+        registration, test = create_user_split(indices, rng)
         if np.intersect1d(registration, test).size:
             raise AssertionError(f"Split overlap detected for {class_name}.")
         registration_by_class[class_name] = registration
@@ -132,7 +130,6 @@ def _classification_metrics(
 def evaluate_random_forest(
     X_features: np.ndarray,
     labels: np.ndarray,
-    registration_count: int,
     repeat: int,
     registration_by_class: dict[str, np.ndarray],
     test_by_class: dict[str, np.ndarray],
@@ -167,7 +164,7 @@ def evaluate_random_forest(
         confusion[class_to_index[true_class], class_to_index[predicted_class]] += 1
         samples.append(
             {
-                "registration_count": registration_count,
+                "registration_count": "dynamic",
                 "repeat": repeat,
                 "source_index": int(source_index),
                 "true_class": true_class,
@@ -180,7 +177,11 @@ def evaluate_random_forest(
     background_index = class_to_index[NO_CONTACT_USER]
     background_total = int(confusion[background_index].sum())
     result = {
-        "registration_count": registration_count,
+        "registration_count": "dynamic",
+        "registration_counts": {
+            class_name: len(indices)
+            for class_name, indices in registration_by_class.items()
+        },
         "repeat": repeat,
         "class_order": list(ALL_CLASSES),
         "classifier": "RandomForestClassifier",
@@ -239,22 +240,36 @@ def save_artifacts(rows: list[dict], samples: list[dict[str, object]]) -> dict:
     metrics = _classification_metrics(aggregate)
     repeat_accuracy = np.asarray([row["overall_accuracy"] for row in selected])
     paths = {
-        "repeat_csv": OUTPUT_DIR / "sequence_statistics_all_classes_rf_repeat_statistics_reg80.csv",
-        "per_class_csv": OUTPUT_DIR / "sequence_statistics_all_classes_rf_per_class_metrics_reg80.csv",
-        "aggregate_csv": OUTPUT_DIR / "sequence_statistics_all_classes_rf_aggregate_confusion_matrix_reg80.csv",
-        "normalized_csv": OUTPUT_DIR / "sequence_statistics_all_classes_rf_normalized_confusion_matrix_reg80.csv",
-        "aggregate_png": OUTPUT_DIR / "sequence_statistics_all_classes_rf_aggregate_confusion_matrix_reg80.png",
-        "normalized_png": OUTPUT_DIR / "sequence_statistics_all_classes_rf_normalized_confusion_matrix_reg80.png",
-        "report": OUTPUT_DIR / "sequence_statistics_all_classes_rf_final_summary_reg80.txt",
+        "repeat_csv": OUTPUT_DIR / "sequence_statistics_all_classes_rf_repeat_statistics_dynamic.csv",
+        "per_class_csv": OUTPUT_DIR / "sequence_statistics_all_classes_rf_per_class_metrics_dynamic.csv",
+        "aggregate_csv": OUTPUT_DIR / "sequence_statistics_all_classes_rf_aggregate_confusion_matrix_dynamic.csv",
+        "normalized_csv": OUTPUT_DIR / "sequence_statistics_all_classes_rf_normalized_confusion_matrix_dynamic.csv",
+        "aggregate_png": OUTPUT_DIR / "sequence_statistics_all_classes_rf_aggregate_confusion_matrix_dynamic.png",
+        "normalized_png": OUTPUT_DIR / "sequence_statistics_all_classes_rf_normalized_confusion_matrix_dynamic.png",
+        "report": OUTPUT_DIR / "sequence_statistics_all_classes_rf_final_summary_dynamic.txt",
     }
     with paths["repeat_csv"].open("w", newline="", encoding="utf-8") as file:
         writer = csv.DictWriter(
             file,
-            fieldnames=["registration_count", "repeat", "train_samples", "test_samples",
+            fieldnames=["registration_count", "registration_counts", "repeat", "train_samples", "test_samples",
                         "overall_accuracy", "correct_samples", "total_samples"],
         )
         writer.writeheader()
-        writer.writerows({field: row[field] for field in writer.fieldnames} for row in selected)
+        writer.writerows(
+            {
+                "registration_count": row["registration_count"],
+                "registration_counts": json.dumps(
+                    row["registration_counts"],
+                    sort_keys=True,
+                ),
+                **{
+                    field: row[field]
+                    for field in writer.fieldnames
+                    if field not in {"registration_count", "registration_counts"}
+                },
+            }
+            for row in selected
+        )
     with paths["per_class_csv"].open("w", newline="", encoding="utf-8") as file:
         writer = csv.DictWriter(
             file,
@@ -263,7 +278,11 @@ def save_artifacts(rows: list[dict], samples: list[dict[str, object]]) -> dict:
         )
         writer.writeheader()
         writer.writerows(
-            {"registration_count": 80, "class_name": name, **values}
+            {
+                "registration_count": selected[0]["registration_counts"][name],
+                "class_name": name,
+                **values,
+            }
             for name, values in metrics.items()
         )
     for key, matrix in (
@@ -340,22 +359,22 @@ def run_benchmark(X: np.ndarray, labels: np.ndarray) -> dict:
     RF_RESULTS_PATH.write_text("", encoding="utf-8")
     all_rows: list[dict] = []
     all_samples: list[dict[str, object]] = []
-    for registration_count in REGISTRATION_COUNTS:
-        rng = np.random.default_rng(RANDOM_SEED)
-        for repeat in range(1, REPEATS + 1):
-            registration, test = prepare_repeat_split(labels, registration_count, rng)
-            result, samples = evaluate_random_forest(
-                X_features, labels, registration_count, repeat, registration, test
-            )
-            all_rows.append(result)
-            all_samples.extend(samples)
-            with RF_RESULTS_PATH.open("a", encoding="utf-8") as file:
-                file.write(json.dumps(result, ensure_ascii=False) + "\n")
-            print(
-                f"Reg={registration_count}, Repeat={repeat:02d}, "
-                f"train={result['train_samples']}, test={result['test_samples']}, "
-                f"accuracy={result['overall_accuracy']:.4f}"
-            )
+    rng = np.random.default_rng(RANDOM_SEED)
+    for repeat in range(1, REPEAT + 1):
+        registration, test = prepare_repeat_split(labels, rng)
+        result, samples = evaluate_random_forest(
+            X_features, labels, repeat, registration, test
+        )
+        all_rows.append(result)
+        all_samples.extend(samples)
+        with RF_RESULTS_PATH.open("a", encoding="utf-8") as file:
+            file.write(json.dumps(result, ensure_ascii=False) + "\n")
+        print(
+            f"RegistrationRatio={REGISTRATION_RATIO:.0%}, "
+            f"Repeat={repeat:02d}, "
+            f"train={result['train_samples']}, test={result['test_samples']}, "
+            f"accuracy={result['overall_accuracy']:.4f}"
+        )
     return save_artifacts(all_rows, all_samples)
 
 
@@ -366,7 +385,10 @@ def main() -> None:
     print(f"RF parameters: n_estimators={RF_N_ESTIMATORS}, random_state={RANDOM_SEED}, "
           f"class_weight={RF_CLASS_WEIGHT}, n_jobs={RF_N_JOBS}")
     print(f"Classes: {ALL_CLASSES}")
-    print(f"Registration counts: {REGISTRATION_COUNTS}; test count: {TEST_COUNT}; repeats: {REPEATS}")
+    print(
+        f"Registration ratio: {REGISTRATION_RATIO:.0%}; "
+        f"test count: dynamic remainder; repeat: {REPEAT}"
+    )
     X, labels = load_data()
     print_dataset_information(X, labels)
     rf_summary = run_benchmark(X, labels)
